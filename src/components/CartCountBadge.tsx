@@ -5,13 +5,15 @@ import { createClient } from '@/lib/supabase/client';
 
 /**
  * Live cart-count display, refreshes when cart_items changes via Supabase Realtime.
- * Renders either as a small red badge (variant="badge") or inline text (variant="text").
  *
- * IMPORTANT: We render `null` (or "0") on first paint to match what SSR produces,
- * then we update from localStorage / Supabase only AFTER `mounted` is true.
- * Without this guard, useState(0) on the server renders "0" into the HTML, then
- * the client reads localStorage and may produce a different value, causing a
- * hydration mismatch (React error #418) and a client-side exception.
+ * SSR/Hydration: we render `0` (or null badge) on first paint to match SSR,
+ * and only update state after `mounted` becomes true.
+ *
+ * Realtime: Supabase forbids calling `.on()` after `.subscribe()`. We must
+ * therefore (a) attach all listeners before subscribing, and (b) only subscribe
+ * once per channel. Each effect run uses a fresh channel name and tears down
+ * the previous one in cleanup. Errors in the realtime path are swallowed so a
+ * websocket hiccup can never crash the entire page.
  */
 export function CartCountBadge({
   variant = 'badge',
@@ -25,76 +27,96 @@ export function CartCountBadge({
     setMounted(true);
 
     const supabase = createClient();
+    let cancelled = false;
 
-    const fetchCount = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data } = await supabase
-          .from('cart_items')
-          .select('quantity')
-          .eq('user_id', user.id);
-        const total = (data ?? []).reduce(
-          (sum, row: { quantity: number }) => sum + (row.quantity ?? 1),
+    const computeFromLocal = (): number => {
+      try {
+        const raw = window.localStorage.getItem('tf_cart');
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(parsed)) return 0;
+        return parsed.reduce(
+          (sum: number, row: { quantity?: number }) =>
+            sum + (row.quantity ?? 1),
           0
         );
-        setCount(total);
-      } else {
-        try {
-          const raw =
-            typeof window !== 'undefined'
-              ? window.localStorage.getItem('tf_cart')
-              : null;
-          const parsed = raw ? JSON.parse(raw) : [];
-          const total = Array.isArray(parsed)
-            ? parsed.reduce(
-                (sum: number, row: { quantity?: number }) =>
-                  sum + (row.quantity ?? 1),
-                0
-              )
-            : 0;
-          setCount(total);
-        } catch {
-          setCount(0);
+      } catch {
+        return 0;
+      }
+    };
+
+    const fetchCount = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (cancelled) return;
+
+        if (user) {
+          const { data, error } = await supabase
+            .from('cart_items')
+            .select('quantity')
+            .eq('user_id', user.id);
+          if (error) throw error;
+          const total = (data ?? []).reduce(
+            (sum, row: { quantity: number }) => sum + (row.quantity ?? 1),
+            0
+          );
+          if (!cancelled) setCount(total);
+        } else {
+          if (!cancelled) setCount(computeFromLocal());
         }
+      } catch {
+        if (!cancelled) setCount(0);
       }
     };
 
     fetchCount();
 
-    const channel = supabase
-      .channel('cart-count-badge')
-      .on(
+    // Realtime subscription — wrap in try/catch so any realtime error
+    // (websocket blocked, RLS, etc) never crashes the page.
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      // Unique channel name per component instance, so Strict Mode's double
+      // mount in dev doesn't clash with the previous channel.
+      const name = `cart-count-${Math.random().toString(36).slice(2, 10)}`;
+      channel = supabase.channel(name);
+      // Attach the listener BEFORE calling subscribe(). Calling on() after
+      // subscribe() is a runtime error in supabase-js v2.
+      channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'cart_items' },
-        () => fetchCount()
-      )
-      .subscribe();
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'tf_cart') fetchCount();
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', onStorage);
+        () => {
+          if (!cancelled) fetchCount();
+        }
+      );
+      channel.subscribe();
+    } catch {
+      // Realtime not available — fall back to localStorage events only.
     }
 
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'tf_cart' && !cancelled) fetchCount();
+    };
+    window.addEventListener('storage', onStorage);
+
     return () => {
-      supabase.removeChannel(channel);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('storage', onStorage);
+      cancelled = true;
+      window.removeEventListener('storage', onStorage);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          /* ignore */
+        }
       }
     };
   }, []);
 
   if (variant === 'text') {
-    // Always render "0" on server and on first client paint to keep markup
-    // identical between SSR and the initial client render.
     return <span suppressHydrationWarning>{mounted ? count : 0}</span>;
   }
 
-  // badge variant: hidden until mounted (matches SSR which never renders the badge)
   if (!mounted || count === 0) return null;
   return (
     <span
