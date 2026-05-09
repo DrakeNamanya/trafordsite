@@ -5,11 +5,13 @@ import type { Product } from '@/lib/supabase/types';
 import { formatUGX } from '@/lib/format';
 
 /**
- * Product card matching the reference design:
- *   - White card with thin border, hover lift + shadow
- *   - Image area with hover overlay containing cart + wishlist circle buttons
- *   - Name (gray, regular weight), red price in Oswald, optional unit
- *   - "Add to Cart" pill that fades in on hover
+ * Product card matching the reference design.
+ *
+ * Important: the entire card is one big <Link> with NO nested <button>s
+ * (buttons inside anchors is invalid HTML and breaks React hydration).
+ * The hover overlay is purely decorative — clicking anywhere on the card
+ * navigates to the product detail page, where the customer picks quantity
+ * and adds to cart / wishlist.
  */
 export function ProductCard({ product }: { product: Product }) {
   return (
@@ -38,35 +40,21 @@ export function ProductCard({ product }: { product: Product }) {
           </span>
         ) : null}
 
-        {/* Hover overlay with circle buttons (clicks bubble up to product link by default,
-            but each button stops propagation so it can run its own action) */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/[0.03] opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100">
-          <button
-            type="button"
-            aria-label="Add to cart"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              // Cart-add logic is handled by the dedicated cart page / SDK on /product/[slug];
-              // we navigate to the product detail so the customer can pick quantity.
-              window.location.href = `/product/${product.slug}`;
-            }}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-traford-green text-white transition hover:scale-110 hover:bg-traford-green-dark"
+        {/* Hover overlay — non-interactive divs styled as buttons.
+            Cannot use real <button>s here because we're inside an <a>. */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/[0.03] opacity-0 transition group-hover:opacity-100">
+          <span
+            aria-hidden
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-traford-green text-white transition group-hover:scale-100"
           >
             <ShoppingCart className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="Add to wishlist"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              window.location.href = `/product/${product.slug}`;
-            }}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-traford-orange text-white transition hover:scale-110 hover:bg-traford-orange-dark"
+          </span>
+          <span
+            aria-hidden
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-traford-orange text-white transition group-hover:scale-100"
           >
             <Heart className="h-4 w-4" />
-          </button>
+          </span>
         </div>
       </div>
 
@@ -83,7 +71,7 @@ export function ProductCard({ product }: { product: Product }) {
       </div>
 
       <span className="font-display mx-auto mt-2 inline-block rounded bg-traford-green px-5 py-1.5 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">
-        Add to Cart
+        View Product
       </span>
     </Link>
   );
