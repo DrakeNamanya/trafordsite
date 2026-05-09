@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --traford-orange: #f15a24;
+  --traford-green: #22b14c;
+  --traford-leaf: #8cc63f;
+  --traford-mint: #e8f3e8;
+}
+
+html,
+body {
+  background: #ffffff;
+  color: #1f2937;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-traford-orange px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-traford-green px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-traford-border bg-white px-5 py-3 text-sm font-semibold text-traford-dark transition hover:bg-gray-50;
+  }
+
+  .card {
+    @apply rounded-2xl border border-traford-border bg-white p-4;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-traford-border bg-white px-4 py-2 text-sm font-medium text-traford-dark transition;
+  }
+
+  .chip-active {
+    @apply bg-traford-orange text-white border-traford-orange;
+  }
+}
