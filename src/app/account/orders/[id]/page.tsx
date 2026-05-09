@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { formatUGX, formatDate } from '@/lib/format';
 import type { Order, OrderItem } from '@/lib/supabase/types';
+import { OrderDetailRealtime } from './OrderDetailRealtime';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,7 @@ export default async function OrderDetailPage({ params }: OrderDetailProps) {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
+      <OrderDetailRealtime orderId={order.id} />
       <div className="mb-4 flex items-center justify-between">
         <Link
           href="/account/orders"

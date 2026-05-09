@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { ShoppingBag } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { formatUGX } from '@/lib/format';
 import { CartItemRow } from './CartItemRow';
+import { CartRealtime } from './CartRealtime';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,6 +78,7 @@ export default async function CartPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <CartRealtime userId={user.id} />
       <h1 className="text-2xl font-extrabold sm:text-3xl">Your cart</h1>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         {/* Items */}
