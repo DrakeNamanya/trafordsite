@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { Leaf, Truck, HandshakeIcon, Heart } from 'lucide-react';
 
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
+
 export const metadata = {
   title: 'About — Traford Farm Fresh',
 };

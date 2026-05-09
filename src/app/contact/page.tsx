@@ -1,5 +1,8 @@
 import { Mail, Phone, MapPin } from 'lucide-react';
 
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
+
 export const metadata = {
   title: 'Contact — Traford Farm Fresh',
 };

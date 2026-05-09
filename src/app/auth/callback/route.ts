@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
 // Handles email confirmation links and OAuth redirects.
 // Supabase appends ?code=... which we exchange for a session cookie.
 export async function GET(request: NextRequest) {

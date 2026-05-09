@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation';
 import { MapPin } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 
+
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 interface Address {

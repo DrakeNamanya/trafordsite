@@ -4,6 +4,9 @@ import { createClient } from '@/lib/supabase/server';
 import { ProductCard } from '@/components/ProductCard';
 import type { Product, Category } from '@/lib/supabase/types';
 
+
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
 export const revalidate = 30;
 
 interface ShopPageProps {

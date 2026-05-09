@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/server';
 import { formatUGX } from '@/lib/format';
 import { CartItemRow } from './CartItemRow';
 
+
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 interface CartRow {

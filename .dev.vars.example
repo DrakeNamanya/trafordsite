@@ -1,0 +1,5 @@
+# Local Cloudflare Pages preview env (used by `wrangler pages dev`).
+# Copy to .dev.vars (gitignored) and fill in real values.
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SITE_URL=

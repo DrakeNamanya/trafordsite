@@ -2,6 +2,9 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { LoginForm } from './LoginForm';
 
+
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
 export default function LoginPage() {
   return (
     <div className="mx-auto max-w-md px-4 py-12 sm:px-6">

@@ -5,6 +5,9 @@ import { ProductCard } from '@/components/ProductCard';
 import { CategoryTile } from '@/components/CategoryTile';
 import type { Product, Category } from '@/lib/supabase/types';
 
+
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
 export const revalidate = 60; // ISR: refresh home every minute
 
 export default async function HomePage() {

@@ -8,6 +8,9 @@ import { ProductCard } from '@/components/ProductCard';
 import { AddToCartButton } from './AddToCartButton';
 import type { Product } from '@/lib/supabase/types';
 
+
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
 }

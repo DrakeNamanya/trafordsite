@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/server';
 import { formatUGX, formatDate } from '@/lib/format';
 import type { Order } from '@/lib/supabase/types';
 
+
+// Cloudflare Pages: run on the Workers edge runtime
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 const STATUS_STYLES: Record<string, string> = {
