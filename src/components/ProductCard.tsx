@@ -1,77 +1,90 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Plus, Star } from 'lucide-react';
+import { ShoppingCart, Heart } from 'lucide-react';
 import type { Product } from '@/lib/supabase/types';
 import { formatUGX } from '@/lib/format';
 
+/**
+ * Product card matching the reference design:
+ *   - White card with thin border, hover lift + shadow
+ *   - Image area with hover overlay containing cart + wishlist circle buttons
+ *   - Name (gray, regular weight), red price in Oswald, optional unit
+ *   - "Add to Cart" pill that fades in on hover
+ */
 export function ProductCard({ product }: { product: Product }) {
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-traford-border bg-white transition hover:shadow-md">
-      {/* Image */}
-      <Link
-        href={`/product/${product.slug}`}
-        className="relative block aspect-[1.05] overflow-hidden bg-traford-mint"
-      >
+    <Link
+      href={`/product/${product.slug}`}
+      className="group flex flex-col overflow-hidden rounded border border-traford-border bg-white p-4 text-center transition hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.1)]"
+    >
+      {/* Image area */}
+      <div className="relative flex h-[200px] w-full items-center justify-center p-2">
         {product.image_url ? (
           <Image
             src={product.image_url}
             alt={product.name}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-cover transition group-hover:scale-105"
+            className="object-contain p-2"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-4xl">🥗</div>
+          <div className="flex h-full w-full items-center justify-center text-5xl">🥗</div>
         )}
-
-        {/* Wishlist heart */}
-        <button
-          type="button"
-          aria-label="Add to wishlist"
-          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-traford-dark shadow hover:text-traford-orange"
-        >
-          <Heart className="h-3.5 w-3.5" />
-        </button>
 
         {/* Discount badge */}
         {product.has_discount && product.discount_percent ? (
-          <span className="absolute left-2 top-2 rounded-full bg-traford-orange px-2 py-0.5 text-[10px] font-bold text-white">
+          <span className="absolute left-2 top-2 rounded-full bg-traford-red px-2 py-0.5 text-[10px] font-bold text-white">
             -{product.discount_percent}%
           </span>
         ) : null}
-      </Link>
 
-      {/* Body */}
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        <Link
-          href={`/product/${product.slug}`}
-          className="line-clamp-1 text-sm font-semibold text-traford-dark hover:text-traford-orange"
-        >
-          {product.name}
-        </Link>
-        <div className="text-[11px] text-traford-muted">per {product.unit}</div>
-
-        {product.rating > 0 ? (
-          <div className="flex items-center gap-1 text-[11px] text-traford-muted">
-            <Star className="h-3 w-3 fill-traford-star text-traford-star" />
-            <span>{product.rating.toFixed(1)}</span>
-            <span>({product.review_count})</span>
-          </div>
-        ) : null}
-
-        <div className="mt-auto flex items-center justify-between pt-2">
-          <div className="text-sm font-bold text-traford-orange">
-            {formatUGX(product.price)}
-          </div>
+        {/* Hover overlay with circle buttons (clicks bubble up to product link by default,
+            but each button stops propagation so it can run its own action) */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/[0.03] opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100">
           <button
             type="button"
             aria-label="Add to cart"
-            className="flex h-6 w-6 items-center justify-center rounded-full bg-traford-green text-white transition hover:opacity-90"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              // Cart-add logic is handled by the dedicated cart page / SDK on /product/[slug];
+              // we navigate to the product detail so the customer can pick quantity.
+              window.location.href = `/product/${product.slug}`;
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-traford-green text-white transition hover:scale-110 hover:bg-traford-green-dark"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <ShoppingCart className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Add to wishlist"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.location.href = `/product/${product.slug}`;
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-traford-orange text-white transition hover:scale-110 hover:bg-traford-orange-dark"
+          >
+            <Heart className="h-4 w-4" />
           </button>
         </div>
       </div>
-    </div>
+
+      {/* Body */}
+      <h3 className="mt-3 line-clamp-2 text-sm font-normal leading-snug text-gray-700">
+        {product.name}
+      </h3>
+
+      <div className="mt-1.5 font-display text-base font-semibold text-traford-red">
+        {formatUGX(product.price)}
+        {product.unit ? (
+          <span className="ml-1 text-[11px] font-normal text-gray-500">/ {product.unit}</span>
+        ) : null}
+      </div>
+
+      <span className="font-display mx-auto mt-2 inline-block rounded bg-traford-green px-5 py-1.5 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">
+        Add to Cart
+      </span>
+    </Link>
   );
 }

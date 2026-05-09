@@ -27,10 +27,7 @@ export function SignupForm() {
         email,
         password,
         options: {
-          data: {
-            full_name: fullName,
-            phone,
-          },
+          data: { full_name: fullName, phone },
           emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${redirect}`,
         },
       });
@@ -40,7 +37,6 @@ export function SignupForm() {
         return;
       }
 
-      // If email confirmation is disabled, the user is signed in immediately
       if (data.session) {
         router.push(redirect);
         router.refresh();
@@ -55,62 +51,61 @@ export function SignupForm() {
   return (
     <form onSubmit={handleSubmit} className="mt-6 space-y-4">
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold">Full name</span>
+        <span className="form-label">Full Name</span>
         <input
           type="text"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           required
-          className="w-full rounded-full border border-traford-border bg-white px-4 py-2.5 text-sm outline-none focus:border-traford-orange"
+          placeholder="John Doe"
+          className="form-input"
         />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold">Email</span>
+        <span className="form-label">Email</span>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full rounded-full border border-traford-border bg-white px-4 py-2.5 text-sm outline-none focus:border-traford-orange"
+          placeholder="your@email.com"
+          className="form-input"
         />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold">Phone</span>
+        <span className="form-label">Phone</span>
         <input
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="+256 7XX XXX XXX"
-          className="w-full rounded-full border border-traford-border bg-white px-4 py-2.5 text-sm outline-none focus:border-traford-orange"
+          placeholder="+256 700 000 000"
+          className="form-input"
         />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold">Password</span>
+        <span className="form-label">Password</span>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-          className="w-full rounded-full border border-traford-border bg-white px-4 py-2.5 text-sm outline-none focus:border-traford-orange"
+          placeholder="Min 6 characters"
+          className="form-input"
         />
       </label>
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-traford-red">
           {error}
         </div>
       )}
       {message && (
-        <div className="rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+        <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
           {message}
         </div>
       )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="btn-primary w-full"
-      >
-        {pending ? 'Creating account…' : 'Create account'}
+      <button type="submit" disabled={pending} className="btn-green w-full">
+        {pending ? 'Creating account…' : 'Create Account'}
       </button>
     </form>
   );

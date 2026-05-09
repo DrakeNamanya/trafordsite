@@ -35,37 +35,35 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="mt-6 space-y-4">
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold">Email</span>
+        <span className="form-label">Email</span>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full rounded-full border border-traford-border bg-white px-4 py-2.5 text-sm outline-none focus:border-traford-orange"
+          placeholder="your@email.com"
+          className="form-input"
         />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold">Password</span>
+        <span className="form-label">Password</span>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-          className="w-full rounded-full border border-traford-border bg-white px-4 py-2.5 text-sm outline-none focus:border-traford-orange"
+          placeholder="Min 6 characters"
+          className="form-input"
         />
       </label>
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-traford-red">
           {error}
         </div>
       )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="btn-primary w-full"
-      >
-        {pending ? 'Signing in…' : 'Sign in'}
+      <button type="submit" disabled={pending} className="btn-green w-full">
+        {pending ? 'Signing in…' : 'Login'}
       </button>
     </form>
   );

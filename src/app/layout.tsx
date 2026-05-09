@@ -23,7 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-white text-traford-dark antialiased">
+      <body className="min-h-screen bg-traford-bg text-traford-text antialiased">
         <Header />
         <main className="min-h-[calc(100vh-200px)]">{children}</main>
         <Footer />

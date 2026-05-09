@@ -1,69 +1,123 @@
 import Link from 'next/link';
-import { ShoppingCart, User, Search } from 'lucide-react';
+import Image from 'next/image';
+import { Search, ShoppingCart } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import type { Category } from '@/lib/supabase/types';
+import { AnnouncementBar } from './AnnouncementBar';
+import { ContactBar } from './ContactBar';
+import { CartCountBadge } from './CartCountBadge';
+import { MobileNav } from './MobileNav';
 
+/**
+ * Three-tier site header:
+ *   1. Red announcement bar (closeable, MoMo numbers)
+ *   2. Green contact bar (phone, email, login/register/account)
+ *   3. White sticky main nav (logo + dynamic categories from Supabase + search/cart icons)
+ *
+ * Categories come live from the `categories` table so the menu always reflects
+ * what's actually available in the catalogue.
+ */
 export async function Header() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+
+  const [{ data: { user } }, { data: categoriesData }, { data: profile }] =
+    await Promise.all([
+      supabase.auth.getUser(),
+      supabase
+        .from('categories')
+        .select('id, name, slug, sort_order, parent_id, is_active')
+        .eq('is_active', true)
+        .is('parent_id', null)
+        .order('sort_order', { ascending: true }),
+      // Fetch full_name only when authed; keep query cheap.
+      supabase.auth
+        .getUser()
+        .then(async ({ data }) =>
+          data.user
+            ? supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', data.user.id)
+                .maybeSingle()
+            : { data: null }
+        ),
+    ]);
+
+  const categories = (categoriesData ?? []) as Pick<
+    Category,
+    'id' | 'name' | 'slug'
+  >[];
+  const userName = (profile as { full_name?: string | null } | null)?.full_name;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-traford-border bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-traford-orange text-white font-bold">
-            T
-          </div>
-          <div className="leading-tight">
-            <div className="text-base font-bold text-traford-dark">Traford</div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-traford-green">
-              Farm Fresh
-            </div>
-          </div>
-        </Link>
+    <>
+      <AnnouncementBar />
+      <ContactBar isAuthed={Boolean(user)} userName={userName} />
 
-        {/* Search (desktop) */}
-        <form action="/shop" className="hidden flex-1 max-w-xl md:block">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-traford-muted" />
-            <input
-              type="search"
-              name="q"
-              placeholder="Search fresh produce, honey, meat…"
-              className="w-full rounded-full border border-traford-border bg-traford-bg py-2.5 pl-10 pr-4 text-sm outline-none focus:border-traford-orange"
+      {/* Main navigation — sticky white bar */}
+      <nav className="sticky top-0 z-40 border-b-2 border-traford-border bg-white shadow-sm">
+        <div className="mx-auto flex h-[70px] max-w-[1280px] items-center px-4">
+          {/* Logo */}
+          <Link href="/" className="flex flex-shrink-0 items-center gap-2">
+            <Image
+              src="/logo.png"
+              alt="Traford Farm Fresh"
+              width={246}
+              height={138}
+              className="h-[55px] w-auto object-contain"
+              priority
             />
-          </div>
-        </form>
+          </Link>
 
-        {/* Nav */}
-        <nav className="flex items-center gap-1 sm:gap-2">
-          <Link
-            href="/shop"
-            className="hidden rounded-full px-3 py-2 text-sm font-medium text-traford-dark hover:bg-traford-mint sm:inline-block"
-          >
-            Shop
-          </Link>
-          <Link
-            href="/cart"
-            className="relative rounded-full p-2 text-traford-dark hover:bg-traford-mint"
-            aria-label="Cart"
-          >
-            <ShoppingCart className="h-5 w-5" />
-          </Link>
-          {user ? (
-            <Link href="/account" className="btn-outline !py-2 !px-3 text-xs sm:text-sm">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Account</span>
+          {/* Category nav (desktop) */}
+          <div className="ml-6 hidden flex-1 items-center justify-center gap-0 md:flex">
+            {categories.slice(0, 9).map((cat) => (
+              <Link
+                key={cat.id}
+                href={`/shop?category=${cat.slug}`}
+                className="font-display whitespace-nowrap border-b-[3px] border-transparent px-2 py-6 text-[13px] font-medium text-traford-text transition hover:border-traford-green hover:text-traford-green"
+              >
+                {cat.name}
+              </Link>
+            ))}
+            <Link
+              href="/contact"
+              className="font-display whitespace-nowrap border-b-[3px] border-transparent px-2 py-6 text-[13px] font-medium text-traford-text transition hover:border-traford-green hover:text-traford-green"
+            >
+              Contact
             </Link>
-          ) : (
-            <Link href="/login" className="btn-primary !py-2 !px-4 text-xs sm:text-sm">
-              Sign in
+          </div>
+
+          {/* Right-side actions */}
+          <div className="ml-auto flex items-center gap-4">
+            {/* Search (desktop): direct GET to /shop */}
+            <form action="/shop" className="hidden lg:block">
+              <label className="relative flex items-center">
+                <Search className="absolute left-3 h-4 w-4 text-gray-400" />
+                <input
+                  type="search"
+                  name="q"
+                  placeholder="Search..."
+                  className="w-[200px] rounded border border-traford-border bg-white py-2 pl-9 pr-3 text-sm outline-none transition focus:border-traford-green"
+                />
+              </label>
+            </form>
+
+            {/* Cart icon w/ live badge */}
+            <Link
+              href="/cart"
+              aria-label="Cart"
+              className="relative text-gray-600 transition hover:text-traford-green"
+            >
+              <ShoppingCart className="h-5 w-5" />
+              <CartCountBadge variant="badge" />
             </Link>
-          )}
-        </nav>
-      </div>
-    </header>
+
+            {/* Mobile menu toggle (handles its own state) */}
+            <MobileNav categories={categories} isAuthed={Boolean(user)} />
+          </div>
+        </div>
+      </nav>
+    </>
   );
 }

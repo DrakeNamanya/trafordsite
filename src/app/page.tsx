@@ -1,10 +1,16 @@
 import Link from 'next/link';
-import { Leaf, Truck, HandshakeIcon } from 'lucide-react';
+import Image from 'next/image';
+import {
+  Store,
+  PhoneCall,
+  Truck,
+  CreditCard,
+  ShoppingBag,
+  Apple as AppleIcon,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { ProductCard } from '@/components/ProductCard';
-import { CategoryTile } from '@/components/CategoryTile';
 import type { Product, Category } from '@/lib/supabase/types';
-
+import { CategoryTabs } from '@/components/CategoryTabs';
 
 // Cloudflare Pages: run on the Workers edge runtime
 export const runtime = 'edge';
@@ -13,153 +19,179 @@ export const revalidate = 60; // ISR: refresh home every minute
 export default async function HomePage() {
   const supabase = await createClient();
 
-  const [{ data: featured }, { data: categories }] = await Promise.all([
+  const [{ data: products }, { data: categories }] = await Promise.all([
     supabase
       .from('products')
       .select('*')
       .eq('is_active', true)
       .eq('audience', 'public')
-      .eq('is_featured', true)
+      .order('is_featured', { ascending: false })
       .order('created_at', { ascending: false })
-      .limit(8),
+      .limit(16),
     supabase
       .from('categories')
-      .select('*')
+      .select('id, name, slug, sort_order, parent_id, is_active')
       .eq('is_active', true)
       .is('parent_id', null)
       .order('sort_order', { ascending: true })
-      .limit(6),
+      .limit(9),
   ]);
 
-  const featuredProducts = (featured ?? []) as Product[];
-  const topCategories = (categories ?? []) as Category[];
+  const allProducts = (products ?? []) as Product[];
+  const topCategories = (categories ?? []) as Pick<
+    Category,
+    'id' | 'name' | 'slug'
+  >[];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {/* HERO */}
-      <section className="overflow-hidden rounded-3xl bg-traford-mint">
-        <div className="grid items-center gap-6 p-6 sm:p-10 md:grid-cols-2">
-          <div>
-            <p className="mb-2 inline-block rounded-full bg-white px-3 py-1 text-xs font-semibold text-traford-green">
-              Farm to Doorstep
-            </p>
-            <h1 className="text-3xl font-extrabold leading-tight text-traford-dark sm:text-4xl md:text-5xl">
-              Eat Fresh.
+    <>
+      {/* HERO — full-bleed green with diagonal split */}
+      <section className="relative min-h-[420px] overflow-hidden bg-traford-green">
+        {/* Background image (right 60% of hero) */}
+        <div className="absolute inset-0 overflow-hidden">
+          <Image
+            src="https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=1600&h=800&fit=crop"
+            alt="Fresh produce abundance"
+            fill
+            priority
+            className="object-cover"
+          />
+          {/* Diagonal green overlay (40% from left on desktop, 55% on mobile) */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(135deg, #3aaa35 40%, transparent 40%)',
+            }}
+          />
+        </div>
+
+        <div className="relative z-10 mx-auto flex min-h-[420px] max-w-[1200px] items-center px-4 py-16">
+          <div className="max-w-xl">
+            <h1 className="font-display text-5xl font-bold uppercase leading-[1.05] text-white drop-shadow-md sm:text-6xl md:text-[64px]">
+              Farm - Fresh
               <br />
-              <span className="text-traford-green">Stay Healthy.</span>
+              Abundance
             </h1>
-            <p className="mt-3 max-w-md text-sm text-traford-muted sm:text-base">
-              Shop fresh produce, meat, honey & groceries sourced directly from
-              Ugandan farmers. Same-day delivery across Kampala.
+            <p className="mt-4 max-w-md text-base text-white/90">
+              Premium fresh fruits, vegetables, spices, herbs and seafood
+              sourced directly from Uganda&apos;s finest farms.
             </p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link href="/shop" className="btn-primary">
-                Shop now
-              </Link>
-              <Link href="/about" className="btn-outline">
-                Learn more
-              </Link>
-            </div>
-          </div>
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-white sm:aspect-square">
-            <div className="flex h-full w-full items-center justify-center text-7xl">
-              🥬🍅🥑
-            </div>
+            <Link
+              href="/shop"
+              className="font-display mt-6 inline-flex items-center gap-2 rounded bg-traford-orange px-9 py-3.5 text-base font-semibold uppercase tracking-wider text-white transition hover:-translate-y-0.5 hover:bg-traford-orange-dark"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              Shop Now
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* FEATURES BAR */}
-      <section className="mt-6 grid grid-cols-1 gap-3 rounded-2xl border border-traford-border bg-white p-4 sm:grid-cols-3">
-        <FeatureItem
-          icon={<Leaf className="h-5 w-5 text-traford-green" />}
-          title="100% Organic"
-          subtitle="Hand-picked from local farms"
-        />
-        <FeatureItem
-          icon={<Truck className="h-5 w-5 text-traford-orange" />}
-          title="Fast Delivery"
-          subtitle="Same-day across Kampala"
-        />
-        <FeatureItem
-          icon={<HandshakeIcon className="h-5 w-5 text-traford-leaf" />}
-          title="Fair Trade"
-          subtitle="Empowering Ugandan farmers"
-        />
-      </section>
+      {/* CATEGORY TABS + PRODUCT GRID */}
+      <CategoryTabs categories={topCategories} products={allProducts} />
 
-      {/* CATEGORIES */}
-      {topCategories.length > 0 && (
-        <section className="mt-8">
-          <SectionHeader title="Shop by Category" href="/shop" />
-          <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-6">
-            {topCategories.map((c) => (
-              <CategoryTile key={c.id} category={c} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* FEATURED */}
-      {featuredProducts.length > 0 && (
-        <section className="mt-8">
-          <SectionHeader title="Featured Products" href="/shop" />
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {featuredProducts.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* PROMO */}
-      <section className="mt-10 overflow-hidden rounded-3xl bg-traford-mint p-8 text-center">
-        <h2 className="text-2xl font-extrabold text-traford-dark sm:text-3xl">
-          Eat Fresh, Stay Healthy
+      {/* HOW IT WORKS */}
+      <section className="bg-white py-16">
+        <h2 className="font-display mb-10 text-center text-3xl uppercase text-gray-800">
+          How It Works
         </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-traford-muted">
-          Discover seasonal favourites and stock up on essentials.
-        </p>
-        <Link href="/shop" className="btn-secondary mt-5">
-          Explore More
-        </Link>
+        <div className="mx-auto grid max-w-[1000px] grid-cols-2 gap-8 px-4 md:grid-cols-4">
+          <Step
+            color="bg-traford-green"
+            icon={<Store className="h-8 w-8 text-white" />}
+            title="Order"
+            text="Browse our online store and place your order from any device"
+          />
+          <Step
+            color="bg-traford-orange"
+            icon={<PhoneCall className="h-8 w-8 text-white" />}
+            title="Confirm"
+            text="We call to confirm your delivery address and preferred time"
+          />
+          <Step
+            color="bg-blue-600"
+            icon={<Truck className="h-8 w-8 text-white" />}
+            title="Deliver"
+            text="We deliver fresh produce at your own convenience"
+          />
+          <Step
+            color="bg-purple-600"
+            icon={<CreditCard className="h-8 w-8 text-white" />}
+            title="Pay"
+            text="Pay securely via MTN MoMo, Airtel Money, FlexiPay or cash"
+          />
+        </div>
       </section>
-    </div>
+
+      {/* ISO BAR */}
+      <section className="border-y border-traford-border bg-[#f7f7f7] py-6 text-center">
+        <h3 className="font-display text-xl uppercase text-traford-green">
+          ISO Certified
+        </h3>
+        <p className="mt-1 text-[13px] text-gray-600">
+          ISO 14001:2015 &nbsp;&nbsp; ISO 45001:2018 &nbsp;&nbsp; ISO 9001:2015
+          &nbsp;&nbsp; ISO 22000:2018
+        </p>
+      </section>
+
+      {/* APP DOWNLOAD */}
+      <section className="bg-traford-green py-12 text-center">
+        <h2 className="font-display text-3xl uppercase text-white">
+          Download Our App!
+        </h2>
+        <p className="mt-2 text-sm text-white/85">
+          Get the Traford Farm Fresh app for a faster shopping experience
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-4">
+          <a
+            href="#"
+            className="flex items-center gap-2.5 rounded-md bg-black/25 px-6 py-3 text-white transition hover:-translate-y-0.5 hover:bg-black/40"
+          >
+            <Store className="h-7 w-7" />
+            <div className="text-left leading-tight">
+              <small className="text-[10px] opacity-80">GET IT ON</small>
+              <div className="text-[15px] font-semibold">Google Play</div>
+            </div>
+          </a>
+          <a
+            href="#"
+            className="flex items-center gap-2.5 rounded-md bg-black/25 px-6 py-3 text-white transition hover:-translate-y-0.5 hover:bg-black/40"
+          >
+            <AppleIcon className="h-7 w-7" />
+            <div className="text-left leading-tight">
+              <small className="text-[10px] opacity-80">Download on the</small>
+              <div className="text-[15px] font-semibold">App Store</div>
+            </div>
+          </a>
+        </div>
+      </section>
+    </>
   );
 }
 
-function FeatureItem({
+function Step({
+  color,
   icon,
   title,
-  subtitle,
+  text,
 }: {
+  color: string;
   icon: React.ReactNode;
   title: string;
-  subtitle: string;
+  text: string;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-traford-mint">
+    <div className="text-center">
+      <div
+        className={`mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full ${color}`}
+      >
         {icon}
       </div>
-      <div>
-        <div className="text-sm font-semibold text-traford-dark">{title}</div>
-        <div className="text-xs text-traford-muted">{subtitle}</div>
-      </div>
-    </div>
-  );
-}
-
-function SectionHeader({ title, href }: { title: string; href: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <h2 className="text-lg font-bold text-traford-dark sm:text-xl">{title}</h2>
-      <Link
-        href={href}
-        className="text-sm font-semibold text-traford-orange hover:underline"
-      >
-        See all →
-      </Link>
+      <h3 className="font-display mb-2 text-lg uppercase text-gray-800">
+        {title}
+      </h3>
+      <p className="text-[13px] leading-relaxed text-gray-500">{text}</p>
     </div>
   );
 }
