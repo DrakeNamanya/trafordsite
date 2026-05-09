@@ -3,6 +3,12 @@ import './globals.css';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 
+// Cloudflare Pages: root layout renders <Header /> which is an async Server
+// Component that calls Supabase, so the layout itself must opt into the edge
+// runtime. Without this, next-on-pages falls back to Node and throws 500 on
+// every page render.
+export const runtime = 'edge';
+
 export const metadata: Metadata = {
   title: 'Traford Farm Fresh — Fresh from the Farm',
   description:
