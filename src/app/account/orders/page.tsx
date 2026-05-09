@@ -4,6 +4,7 @@ import { Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { formatUGX, formatDate } from '@/lib/format';
 import type { Order } from '@/lib/supabase/types';
+import { OrdersRealtime } from './OrdersRealtime';
 
 
 // Cloudflare Pages: run on the Workers edge runtime
@@ -37,6 +38,7 @@ export default async function OrdersPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+      <OrdersRealtime userId={user.id} />
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-extrabold sm:text-3xl">My orders</h1>
         <Link href="/account" className="text-sm text-traford-muted hover:text-traford-orange">
