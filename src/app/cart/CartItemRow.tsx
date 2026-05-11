@@ -1,53 +1,29 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Minus, Plus, Trash2 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { useCart, type LocalCartLine } from '@/lib/cart-store';
 import { formatUGX } from '@/lib/format';
 
 interface Props {
-  cartItemId: string;
+  productId: string | number;
   quantity: number;
-  product: {
-    id: string;
-    name: string;
-    slug: string;
-    price: number;
-    unit: string;
-    image_url: string | null;
-    stock: number;
-  };
+  product: LocalCartLine['product'];
 }
 
-export function CartItemRow({ cartItemId, quantity: initialQty, product }: Props) {
-  const router = useRouter();
-  const [qty, setQty] = useState(initialQty);
-  const [pending, startTransition] = useTransition();
+export function CartItemRow({ productId, quantity, product }: Props) {
+  const { updateQuantity, removeFromCart } = useCart();
 
-  const updateQty = (newQty: number) => {
-    if (newQty < 1) return;
-    if (newQty > product.stock) return;
-    setQty(newQty);
-    startTransition(async () => {
-      const supabase = createClient();
-      await supabase
-        .from('cart_items')
-        .update({ quantity: newQty })
-        .eq('id', cartItemId);
-      router.refresh();
-    });
+  const dec = () => {
+    if (quantity <= 1) return;
+    updateQuantity(productId, quantity - 1);
   };
-
-  const remove = () => {
-    startTransition(async () => {
-      const supabase = createClient();
-      await supabase.from('cart_items').delete().eq('id', cartItemId);
-      router.refresh();
-    });
+  const inc = () => {
+    if (product.stock && quantity >= product.stock) return;
+    updateQuantity(productId, quantity + 1);
   };
+  const remove = () => removeFromCart(productId);
 
   return (
     <div className="card flex gap-3">
@@ -81,7 +57,6 @@ export function CartItemRow({ cartItemId, quantity: initialQty, product }: Props
           <button
             type="button"
             onClick={remove}
-            disabled={pending}
             aria-label="Remove"
             className="text-traford-muted hover:text-traford-orange"
           >
@@ -94,18 +69,20 @@ export function CartItemRow({ cartItemId, quantity: initialQty, product }: Props
           <div className="flex items-center rounded-full border border-traford-border">
             <button
               type="button"
-              onClick={() => updateQty(qty - 1)}
-              disabled={pending || qty <= 1}
+              onClick={dec}
+              disabled={quantity <= 1}
               className="flex h-8 w-8 items-center justify-center rounded-l-full hover:bg-traford-mint disabled:opacity-50"
               aria-label="Decrease"
             >
               <Minus className="h-3 w-3" />
             </button>
-            <div className="w-8 text-center text-sm font-semibold">{qty}</div>
+            <div className="w-8 text-center text-sm font-semibold">
+              {quantity}
+            </div>
             <button
               type="button"
-              onClick={() => updateQty(qty + 1)}
-              disabled={pending || qty >= product.stock}
+              onClick={inc}
+              disabled={!!product.stock && quantity >= product.stock}
               className="flex h-8 w-8 items-center justify-center rounded-r-full hover:bg-traford-mint disabled:opacity-50"
               aria-label="Increase"
             >
@@ -113,7 +90,7 @@ export function CartItemRow({ cartItemId, quantity: initialQty, product }: Props
             </button>
           </div>
           <div className="text-sm font-bold text-traford-orange">
-            {formatUGX(product.price * qty)}
+            {formatUGX(product.price * quantity)}
           </div>
         </div>
       </div>

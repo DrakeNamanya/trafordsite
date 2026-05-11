@@ -1,68 +1,29 @@
+'use client';
+
 import Link from 'next/link';
 import { ShoppingBag } from 'lucide-react';
-import { createClient } from '@/lib/supabase/server';
+import { useCart } from '@/lib/cart-store';
 import { formatUGX } from '@/lib/format';
 import { CartItemRow } from './CartItemRow';
-import { CartRealtime } from './CartRealtime';
 
+/**
+ * Guest-friendly cart page. All state lives in localStorage via useCart().
+ * No login required.
+ */
+export default function CartPage() {
+  const { items, subtotal, isHydrated } = useCart();
 
-// Cloudflare Pages: run on the Workers edge runtime
-export const runtime = 'edge';
-export const dynamic = 'force-dynamic';
-
-interface CartRow {
-  id: string;
-  quantity: number;
-  product: {
-    id: string;
-    name: string;
-    slug: string;
-    price: number;
-    unit: string;
-    image_url: string | null;
-    stock: number;
-  } | null;
-}
-
-export default async function CartPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  // While hydrating from localStorage, render a stable skeleton to avoid
+  // a flash of "empty cart" for users who actually have items stored.
+  if (!isHydrated) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 lg:px-8">
         <ShoppingBag className="mx-auto h-12 w-12 text-traford-muted" />
         <h1 className="mt-4 text-2xl font-bold">Your cart</h1>
-        <p className="mt-2 text-traford-muted">
-          Sign in to view items in your cart.
-        </p>
-        <Link href="/login?redirect=/cart" className="btn-primary mt-6">
-          Sign in
-        </Link>
+        <p className="mt-2 text-traford-muted">Loading…</p>
       </div>
     );
   }
-
-  const { data } = await supabase
-    .from('cart_items')
-    .select(
-      'id, quantity, product:products(id, name, slug, price, unit, image_url, stock)'
-    )
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
-
-  const items = ((data ?? []) as unknown as CartRow[]).filter(
-    (i) => i.product !== null
-  );
-
-  const subtotal = items.reduce(
-    (sum, i) => sum + (i.product?.price ?? 0) * i.quantity,
-    0
-  );
-  const shipping = subtotal > 0 ? 5000 : 0;
-  const total = subtotal + shipping;
 
   if (items.length === 0) {
     return (
@@ -79,19 +40,21 @@ export default async function CartPage() {
     );
   }
 
+  const shipping = subtotal > 0 ? 5000 : 0;
+  const total = subtotal + shipping;
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <CartRealtime userId={user.id} />
       <h1 className="text-2xl font-extrabold sm:text-3xl">Your cart</h1>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         {/* Items */}
         <div className="space-y-3 lg:col-span-2">
           {items.map((item) => (
             <CartItemRow
-              key={item.id}
-              cartItemId={item.id}
+              key={String(item.productId)}
+              productId={item.productId}
               quantity={item.quantity}
-              product={item.product!}
+              product={item.product}
             />
           ))}
         </div>

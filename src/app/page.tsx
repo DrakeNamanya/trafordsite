@@ -8,46 +8,28 @@ import {
   ShoppingBag,
   Apple as AppleIcon,
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/server';
-import type { Product, Category } from '@/lib/supabase/types';
 import { CategoryTabs } from '@/components/CategoryTabs';
+import { fetchCategories, fetchProducts } from '@/lib/api';
 
 // Cloudflare Pages: run on the Workers edge runtime
 export const runtime = 'edge';
 export const revalidate = 60; // ISR: refresh home every minute
 
 export default async function HomePage() {
-  const supabase = await createClient();
-
-  const [{ data: products }, { data: categories }] = await Promise.all([
-    supabase
-      .from('products')
-      .select('*')
-      .eq('is_active', true)
-      .eq('audience', 'public')
-      .order('is_featured', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(16),
-    supabase
-      .from('categories')
-      .select('id, name, slug, sort_order, parent_id, is_active')
-      .eq('is_active', true)
-      .is('parent_id', null)
-      .order('sort_order', { ascending: true })
-      .limit(9),
+  const [allProducts, allCategories] = await Promise.all([
+    fetchProducts({ limit: 16 }).catch(() => []),
+    fetchCategories().catch(() => []),
   ]);
 
-  const allProducts = (products ?? []) as Product[];
-  const topCategories = (categories ?? []) as Pick<
-    Category,
-    'id' | 'name' | 'slug'
-  >[];
+  // Public API may return everything; trim to top-level (no parent) and cap to 9
+  const topCategories = allCategories
+    .filter((c) => c.parent_id === null || c.parent_id === undefined)
+    .slice(0, 9);
 
   return (
     <>
       {/* HERO — full-bleed green with diagonal split */}
       <section className="relative min-h-[420px] overflow-hidden bg-traford-green">
-        {/* Background image (right 60% of hero) */}
         <div className="absolute inset-0 overflow-hidden">
           <Image
             src="https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=1600&h=800&fit=crop"
@@ -56,7 +38,6 @@ export default async function HomePage() {
             priority
             className="object-cover"
           />
-          {/* Diagonal green overlay (40% from left on desktop, 55% on mobile) */}
           <div
             className="absolute inset-0"
             style={{
@@ -124,7 +105,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ISO BAR */}
       <section className="border-y border-traford-border bg-[#f7f7f7] py-6 text-center">
         <h3 className="font-display text-xl uppercase text-traford-green">
           ISO Certified
@@ -135,7 +115,6 @@ export default async function HomePage() {
         </p>
       </section>
 
-      {/* APP DOWNLOAD */}
       <section className="bg-traford-green py-12 text-center">
         <h2 className="font-display text-3xl uppercase text-white">
           Download Our App!

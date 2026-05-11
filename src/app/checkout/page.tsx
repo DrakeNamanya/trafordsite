@@ -1,56 +1,43 @@
-import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { CheckoutForm } from './CheckoutForm';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCart } from '@/lib/cart-store';
 import { formatUGX } from '@/lib/format';
+import { CheckoutForm } from './CheckoutForm';
 
+/**
+ * Guest-friendly checkout page. Reads cart entirely from localStorage via
+ * useCart() — no auth gate.
+ */
+export default function CheckoutPage() {
+  const router = useRouter();
+  const { items, subtotal, isHydrated, clearCart } = useCart();
 
-// Cloudflare Pages: run on the Workers edge runtime
-export const runtime = 'edge';
-export const dynamic = 'force-dynamic';
+  // If the user lands here with an empty cart, bounce them to /cart.
+  useEffect(() => {
+    if (isHydrated && items.length === 0) {
+      router.replace('/cart');
+    }
+  }, [isHydrated, items.length, router]);
 
-interface CartRow {
-  id: string;
-  quantity: number;
-  product: {
-    id: string;
-    name: string;
-    price: number;
-    unit: string;
-    stock: number;
-    audience: string;
-  } | null;
-}
-
-export default async function CheckoutPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login?redirect=/checkout');
-
-  const { data } = await supabase
-    .from('cart_items')
-    .select('id, quantity, product:products(id, name, price, unit, stock, audience)')
-    .eq('user_id', user.id);
-
-  const items = ((data ?? []) as unknown as CartRow[]).filter(
-    (i) => i.product !== null
-  );
-
-  if (items.length === 0) {
-    redirect('/cart');
+  if (!isHydrated) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 lg:px-8">
+        <p className="text-traford-muted">Loading checkout…</p>
+      </div>
+    );
   }
 
-  const subtotal = items.reduce(
-    (sum, i) => sum + (i.product?.price ?? 0) * i.quantity,
-    0
-  );
+  if (items.length === 0) {
+    return null; // redirect is in-flight
+  }
+
   const shipping = 5000;
   const total = subtotal + shipping;
 
-  // Build payload for the RPC
   const rpcItems = items.map((i) => ({
-    product_id: i.product!.id,
+    product_id: i.productId,
     quantity: i.quantity,
   }));
 
@@ -60,7 +47,11 @@ export default async function CheckoutPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <CheckoutForm items={rpcItems} total={total} />
+          <CheckoutForm
+            items={rpcItems}
+            total={total}
+            onSuccess={() => clearCart()}
+          />
         </div>
 
         <aside className="card h-fit space-y-3 lg:sticky lg:top-24">
@@ -68,14 +59,14 @@ export default async function CheckoutPage() {
           <div className="space-y-2">
             {items.map((i) => (
               <div
-                key={i.id}
+                key={String(i.productId)}
                 className="flex items-center justify-between text-sm"
               >
                 <span className="truncate">
-                  {i.product?.name} × {i.quantity}
+                  {i.product.name} × {i.quantity}
                 </span>
                 <span className="font-semibold">
-                  {formatUGX((i.product?.price ?? 0) * i.quantity)}
+                  {formatUGX(i.product.price * i.quantity)}
                 </span>
               </div>
             ))}

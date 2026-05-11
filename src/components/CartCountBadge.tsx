@@ -1,123 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { useCart } from '@/lib/cart-store';
 
 /**
- * Live cart-count display, refreshes when cart_items changes via Supabase Realtime.
+ * Live cart-count display, sourced from the localStorage-backed CartProvider.
  *
- * SSR/Hydration: we render `0` (or null badge) on first paint to match SSR,
- * and only update state after `mounted` becomes true.
- *
- * Realtime: Supabase forbids calling `.on()` after `.subscribe()`. We must
- * therefore (a) attach all listeners before subscribing, and (b) only subscribe
- * once per channel. Each effect run uses a fresh channel name and tears down
- * the previous one in cleanup. Errors in the realtime path are swallowed so a
- * websocket hiccup can never crash the entire page.
+ * Reads from the new client-side cart store so it works for unauthenticated
+ * guests (which is the default now that we route checkout through
+ * /api/public/orders/guest-checkout). Updates automatically whenever the
+ * store changes — no Supabase realtime required.
  */
 export function CartCountBadge({
   variant = 'badge',
 }: {
   variant?: 'badge' | 'text';
 }) {
-  const [mounted, setMounted] = useState(false);
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    setMounted(true);
-
-    const supabase = createClient();
-    let cancelled = false;
-
-    const computeFromLocal = (): number => {
-      try {
-        const raw = window.localStorage.getItem('tf_cart');
-        const parsed = raw ? JSON.parse(raw) : [];
-        if (!Array.isArray(parsed)) return 0;
-        return parsed.reduce(
-          (sum: number, row: { quantity?: number }) =>
-            sum + (row.quantity ?? 1),
-          0
-        );
-      } catch {
-        return 0;
-      }
-    };
-
-    const fetchCount = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (cancelled) return;
-
-        if (user) {
-          const { data, error } = await supabase
-            .from('cart_items')
-            .select('quantity')
-            .eq('user_id', user.id);
-          if (error) throw error;
-          const total = (data ?? []).reduce(
-            (sum, row: { quantity: number }) => sum + (row.quantity ?? 1),
-            0
-          );
-          if (!cancelled) setCount(total);
-        } else {
-          if (!cancelled) setCount(computeFromLocal());
-        }
-      } catch {
-        if (!cancelled) setCount(0);
-      }
-    };
-
-    fetchCount();
-
-    // Realtime subscription — wrap in try/catch so any realtime error
-    // (websocket blocked, RLS, etc) never crashes the page.
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    try {
-      // Unique channel name per component instance, so Strict Mode's double
-      // mount in dev doesn't clash with the previous channel.
-      const name = `cart-count-${Math.random().toString(36).slice(2, 10)}`;
-      channel = supabase.channel(name);
-      // Attach the listener BEFORE calling subscribe(). Calling on() after
-      // subscribe() is a runtime error in supabase-js v2.
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'cart_items' },
-        () => {
-          if (!cancelled) fetchCount();
-        }
-      );
-      channel.subscribe();
-    } catch {
-      // Realtime not available — fall back to localStorage events only.
-    }
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'tf_cart' && !cancelled) fetchCount();
-    };
-    window.addEventListener('storage', onStorage);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener('storage', onStorage);
-      if (channel) {
-        try {
-          supabase.removeChannel(channel);
-        } catch {
-          /* ignore */
-        }
-      }
-    };
-  }, []);
+  const { itemCount, isHydrated } = useCart();
+  const count = isHydrated ? itemCount : 0;
 
   if (variant === 'text') {
-    return <span suppressHydrationWarning>{mounted ? count : 0}</span>;
+    return <span suppressHydrationWarning>{count}</span>;
   }
 
-  if (!mounted || count === 0) return null;
+  if (!isHydrated || count === 0) return null;
   return (
     <span
       suppressHydrationWarning

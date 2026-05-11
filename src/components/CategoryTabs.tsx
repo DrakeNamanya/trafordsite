@@ -13,31 +13,28 @@ import {
   LayoutGrid,
   type LucideIcon,
 } from 'lucide-react';
-import type { Category, Product } from '@/lib/supabase/types';
+import type { ApiCategory, ApiProduct } from '@/lib/api';
 import { ProductCard } from './ProductCard';
 
 /**
  * Category tab strip + filtered product grid.
- * Renders all products initially, then filters in-memory when a tab is clicked.
- *
- * Props:
- *   categories — top-level Supabase categories
- *   products   — already-fetched featured products to display
+ * Filters in-memory against ApiProduct.category_id when a tab is clicked.
  */
 export function CategoryTabs({
   categories,
   products,
 }: {
-  categories: Pick<Category, 'id' | 'name' | 'slug'>[];
-  products: Product[];
+  categories: ApiCategory[];
+  products: ApiProduct[];
 }) {
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | number | null>(null);
 
   const visible = activeId
-    ? products.filter((p) => p.category_id === activeId)
+    ? products.filter(
+        (p) => String(p.category_id) === String(activeId)
+      )
     : products;
 
-  // Map category names to lucide icons (best-effort; falls back to Tag)
   const iconFor = (name: string): LucideIcon => {
     const k = name.toLowerCase();
     if (k.includes('fruit')) return Apple;
@@ -47,7 +44,12 @@ export function CategoryTabs({
     if (k.includes('dry') || k.includes('grain') || k.includes('legume')) return Wheat;
     if (k.includes('fish') || k.includes('sea')) return Fish;
     if (k.includes('beef')) return Beef;
-    if (k.includes('chicken') || k.includes('poultry') || k.includes('goat') || k.includes('meat'))
+    if (
+      k.includes('chicken') ||
+      k.includes('poultry') ||
+      k.includes('goat') ||
+      k.includes('meat')
+    )
       return Drumstick;
     if (k.includes('fresh')) return Leaf;
     return Tag;
@@ -55,7 +57,6 @@ export function CategoryTabs({
 
   return (
     <>
-      {/* Tab strip */}
       <section className="bg-traford-bg-alt py-8">
         <div className="mx-auto flex max-w-[1200px] flex-wrap justify-center px-4">
           <button
@@ -73,10 +74,10 @@ export function CategoryTabs({
           {categories.map((cat, i) => {
             const Icon = iconFor(cat.name);
             const isLast = i === categories.length - 1;
-            const isActive = activeId === cat.id;
+            const isActive = String(activeId) === String(cat.id);
             return (
               <button
-                key={cat.id}
+                key={String(cat.id)}
                 type="button"
                 onClick={() => setActiveId(cat.id)}
                 className={`font-display flex items-center gap-2 px-7 py-3 text-[15px] font-medium uppercase tracking-wider transition ${
@@ -95,7 +96,6 @@ export function CategoryTabs({
         </div>
       </section>
 
-      {/* Product grid */}
       <section className="mx-auto max-w-[1200px] px-4 py-10">
         {visible.length === 0 ? (
           <div className="py-16 text-center text-gray-400">
@@ -104,7 +104,7 @@ export function CategoryTabs({
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-5">
             {visible.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard key={String(p.id)} product={p} />
             ))}
           </div>
         )}

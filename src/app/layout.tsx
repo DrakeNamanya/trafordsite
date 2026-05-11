@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { CartProviderRoot } from '@/components/CartProviderRoot';
 
 // Cloudflare Pages: root layout renders <Header /> which is an async Server
 // Component that calls Supabase, so the layout itself must opt into the edge
@@ -24,9 +25,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-traford-bg text-traford-text antialiased">
-        <Header />
-        <main className="min-h-[calc(100vh-200px)]">{children}</main>
-        <Footer />
+        <CartProviderRoot>
+          <Header />
+          <main className="min-h-[calc(100vh-200px)]">{children}</main>
+          <Footer />
+        </CartProviderRoot>
       </body>
     </html>
   );

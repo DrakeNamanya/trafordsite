@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import { Search, SlidersHorizontal } from 'lucide-react';
-import { createClient } from '@/lib/supabase/server';
 import { ProductCard } from '@/components/ProductCard';
-import type { Product, Category } from '@/lib/supabase/types';
-
+import { fetchCategories, fetchProducts } from '@/lib/api';
 
 // Cloudflare Pages: run on the Workers edge runtime
 export const runtime = 'edge';
@@ -15,55 +13,50 @@ interface ShopPageProps {
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
   const params = await searchParams;
-  const supabase = await createClient();
 
-  // Load top-level categories for filter chips
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('is_active', true)
-    .is('parent_id', null)
-    .order('sort_order', { ascending: true });
+  const [allCategories, allProducts] = await Promise.all([
+    fetchCategories().catch(() => []),
+    fetchProducts({ limit: 200, search: params.q }).catch(() => []),
+  ]);
 
-  const topCategories = (categories ?? []) as Category[];
+  const topCategories = allCategories.filter(
+    (c) => c.parent_id === null || c.parent_id === undefined
+  );
 
-  // Resolve category slug -> id
-  let categoryId: string | null = null;
+  // Resolve category slug -> id for filtering
+  let categoryId: string | number | null = null;
   if (params.category) {
     const match = topCategories.find((c) => c.slug === params.category);
     if (match) categoryId = match.id;
   }
 
-  // Build product query — RLS automatically hides field_staff_only items for public users
-  let query = supabase
-    .from('products')
-    .select('*', { count: 'exact' })
-    .eq('is_active', true)
-    .eq('audience', 'public');
-
-  if (categoryId) query = query.eq('category_id', categoryId);
-  if (params.q) query = query.ilike('name', `%${params.q}%`);
+  // Filter + sort in memory (the public API doesn't expose all sort params)
+  let products = allProducts;
+  if (categoryId !== null) {
+    products = products.filter(
+      (p) => String(p.category_id) === String(categoryId)
+    );
+  }
 
   switch (params.sort) {
     case 'price_asc':
-      query = query.order('price', { ascending: true });
+      products = products.slice().sort((a, b) => a.price - b.price);
       break;
     case 'price_desc':
-      query = query.order('price', { ascending: false });
+      products = products.slice().sort((a, b) => b.price - a.price);
       break;
     case 'rating':
-      query = query.order('rating', { ascending: false });
+      products = products.slice().sort((a, b) => b.rating - a.rating);
       break;
     default:
-      query = query.order('created_at', { ascending: false });
+      // 'newest' — public API already returns in recommended order
+      break;
   }
 
-  const { data: products, count } = await query.limit(60);
-  const productList = (products ?? []) as Product[];
+  const count = products.length;
 
   return (
     <div>
-      {/* Orange header */}
       <section className="bg-traford-orange px-4 pb-6 pt-6 text-white sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <h1 className="text-2xl font-extrabold sm:text-3xl">Shop</h1>
@@ -76,7 +69,6 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           </button>
         </div>
 
-        {/* Embedded white search */}
         <form action="/shop" className="mx-auto mt-4 max-w-7xl">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-traford-muted" />
@@ -95,7 +87,6 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
       </section>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* Category chips */}
         <div className="-mx-1 flex gap-2 overflow-x-auto pb-1">
           <Link
             href="/shop"
@@ -105,7 +96,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           </Link>
           {topCategories.map((c) => (
             <Link
-              key={c.id}
+              key={String(c.id)}
               href={`/shop?category=${c.slug}`}
               className={`chip whitespace-nowrap ${
                 params.category === c.slug ? 'chip-active' : ''
@@ -117,23 +108,21 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           ))}
         </div>
 
-        {/* Count + sort */}
         <div className="mt-4 flex items-center justify-between text-sm">
           <div className="font-semibold text-traford-dark">
-            {count ?? productList.length} products
+            {count} products
           </div>
           <SortMenu current={params.sort} />
         </div>
 
-        {/* Product grid */}
-        {productList.length === 0 ? (
+        {products.length === 0 ? (
           <div className="mt-12 rounded-2xl border border-dashed border-traford-border p-10 text-center text-traford-muted">
             No products found. Try a different search.
           </div>
         ) : (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {productList.map((p) => (
-              <ProductCard key={p.id} product={p} />
+            {products.map((p) => (
+              <ProductCard key={String(p.id)} product={p} />
             ))}
           </div>
         )}

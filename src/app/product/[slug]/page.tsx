@@ -2,49 +2,38 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Star, Truck, Shield, Leaf } from 'lucide-react';
-import { createClient } from '@/lib/supabase/server';
+import { fetchProductBySlug, fetchProducts, type ApiProduct } from '@/lib/api';
 import { formatUGX } from '@/lib/format';
 import { ProductCard } from '@/components/ProductCard';
 import { AddToCartButton } from './AddToCartButton';
-import type { Product } from '@/lib/supabase/types';
-
 
 // Cloudflare Pages: run on the Workers edge runtime
 export const runtime = 'edge';
+export const revalidate = 30;
+
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const supabase = await createClient();
 
-  const { data: product } = await supabase
-    .from('products')
-    .select('*')
-    .eq('slug', slug)
-    .eq('is_active', true)
-    .eq('audience', 'public')
-    .maybeSingle();
-
+  const product = await fetchProductBySlug(slug).catch(() => null);
   if (!product) notFound();
-  const p = product as Product;
+  const p: ApiProduct = product;
 
   // Related items in same category
-  const { data: related } = await supabase
-    .from('products')
-    .select('*')
-    .eq('is_active', true)
-    .eq('audience', 'public')
-    .eq('category_id', p.category_id ?? '')
-    .neq('id', p.id)
-    .limit(4);
-
-  const relatedProducts = (related ?? []) as Product[];
+  const all = await fetchProducts({ limit: 50 }).catch(() => []);
+  const relatedProducts = all
+    .filter(
+      (rp) =>
+        String(rp.category_id) === String(p.category_id) &&
+        String(rp.id) !== String(p.id)
+    )
+    .slice(0, 4);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {/* Breadcrumb */}
       <nav className="mb-4 text-xs text-traford-muted">
         <Link href="/" className="hover:text-traford-orange">
           Home
@@ -58,7 +47,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
       </nav>
 
       <div className="grid gap-8 md:grid-cols-2">
-        {/* Image */}
         <div className="relative aspect-square overflow-hidden rounded-3xl bg-traford-mint">
           {p.image_url ? (
             <Image
@@ -81,7 +69,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
           ) : null}
         </div>
 
-        {/* Info */}
         <div>
           <h1 className="text-2xl font-extrabold text-traford-dark sm:text-3xl">
             {p.name}
@@ -136,10 +123,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
           )}
 
           <div className="mt-6">
-            <AddToCartButton productId={p.id} disabled={p.stock <= 0} />
+            <AddToCartButton product={p} disabled={p.stock <= 0} />
           </div>
 
-          {/* Trust badges */}
           <div className="mt-8 grid grid-cols-3 gap-3">
             <Badge icon={<Leaf className="h-4 w-4" />} label="100% Organic" />
             <Badge icon={<Truck className="h-4 w-4" />} label="Same-day" />
@@ -153,7 +139,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <h2 className="mb-3 text-xl font-bold">You may also like</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {relatedProducts.map((rp) => (
-              <ProductCard key={rp.id} product={rp} />
+              <ProductCard key={String(rp.id)} product={rp} />
             ))}
           </div>
         </section>

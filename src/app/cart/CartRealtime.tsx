@@ -1,16 +1,10 @@
 'use client';
 
-import { useRealtimeRefresh } from '@/hooks/useRealtime';
-
 /**
- * Subscribes to the current user's cart_items rows. When the cart changes
- * (add/remove/quantity edit elsewhere — e.g. mobile app), the cart page
- * Server Component re-fetches fresh data.
+ * Legacy Supabase realtime subscription — no longer used in the guest cart flow.
+ * Kept as an inert no-op so any stale imports won't break the build.
+ * Safe to delete in a future cleanup pass.
  */
-export function CartRealtime({ userId }: { userId: string }) {
-  useRealtimeRefresh({
-    table: 'cart_items',
-    filter: `user_id=eq.${userId}`,
-  });
+export function CartRealtime(_props: { userId?: string }) {
   return null;
 }

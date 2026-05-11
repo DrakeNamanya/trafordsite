@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import type { PaymentMethod } from '@/lib/supabase/types';
+import { guestCheckout, type GuestCheckoutItem } from '@/lib/api';
 
-interface Item {
-  product_id: string;
-  quantity: number;
-}
+type PaymentMethod =
+  | 'mtn_momo'
+  | 'airtel_money'
+  | 'flexipay'
+  | 'cash_on_delivery';
 
 const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: string }[] = [
   { value: 'mtn_momo', label: 'MTN Mobile Money', icon: '📱' },
@@ -17,42 +17,121 @@ const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: string }[] =
   { value: 'cash_on_delivery', label: 'Cash on Delivery', icon: '💵' },
 ];
 
-export function CheckoutForm({ items, total }: { items: Item[]; total: number }) {
+interface Item {
+  product_id: string | number;
+  quantity: number;
+}
+
+export function CheckoutForm({
+  items,
+  total,
+  onSuccess,
+}: {
+  items: Item[];
+  total: number;
+  onSuccess?: () => void;
+}) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [addressLine, setAddressLine] = useState('');
   const [city, setCity] = useState('Kampala');
   const [notes, setNotes] = useState('');
   const [payment, setPayment] = useState<PaymentMethod>('mtn_momo');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    startTransition(async () => {
-      const supabase = createClient();
-      const { data, error: rpcError } = await supabase.rpc('create_order', {
-        p_items: items,
-        p_payment_method: payment,
-        p_shipping_full_name: fullName,
-        p_shipping_phone: phone,
-        p_shipping_address_line: addressLine,
-        p_shipping_city: city,
-        p_notes: notes,
+
+    if (items.length === 0) {
+      setError('Your cart is empty.');
+      return;
+    }
+
+    setPending(true);
+    try {
+      const checkoutItems: GuestCheckoutItem[] = items.map((i) => ({
+        product_id: i.product_id,
+        quantity: i.quantity,
+      }));
+
+      const composedNotes = [`Payment method: ${payment}`, notes.trim()]
+        .filter(Boolean)
+        .join(' — ');
+
+      const response = await guestCheckout({
+        full_name: fullName.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
+        delivery_address: addressLine.trim(),
+        delivery_city: city.trim() || undefined,
+        notes: composedNotes,
+        items: checkoutItems,
       });
 
-      if (rpcError) {
-        setError(rpcError.message);
-        return;
-      }
+      const number =
+        response.order_number ??
+        response.order?.order_number ??
+        null;
 
-      const orderId = (data as { order_id?: string } | null)?.order_id;
-      router.push(orderId ? `/account/orders/${orderId}` : '/account/orders');
-    });
+      // Clear the local cart now that the order is safely on the server.
+      onSuccess?.();
+
+      if (number) {
+        setOrderNumber(number);
+      } else {
+        // Fallback: bounce to home if the API didn't return an order number.
+        router.push('/');
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to place order. Please try again.'
+      );
+    } finally {
+      setPending(false);
+    }
   };
+
+  if (orderNumber) {
+    return (
+      <div className="card space-y-4 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-traford-mint text-3xl">
+          ✅
+        </div>
+        <h2 className="text-xl font-extrabold">Order placed!</h2>
+        <p className="text-sm text-traford-muted">
+          Thank you{fullName ? `, ${fullName.split(' ')[0]}` : ''}. We&apos;ll be
+          in touch shortly to confirm delivery.
+        </p>
+        <div className="inline-flex items-center gap-2 rounded-full bg-traford-orange/10 px-4 py-2 text-sm font-bold text-traford-orange">
+          <span className="opacity-70">Order #</span>
+          <span>{orderNumber}</span>
+        </div>
+        <div className="text-sm">
+          Total:{' '}
+          <span className="font-bold">
+            UGX {total.toLocaleString('en-UG')}
+          </span>
+        </div>
+        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-center">
+          <a href="/shop" className="btn-primary">
+            Continue shopping
+          </a>
+          <a
+            href="/"
+            className="rounded-full border border-traford-border px-5 py-2 text-sm font-semibold hover:bg-traford-bg"
+          >
+            Back to home
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -70,6 +149,12 @@ export function CheckoutForm({ items, total }: { items: Item[]; total: number })
           onChange={setPhone}
           placeholder="+256 7XX XXX XXX"
           required
+        />
+        <Field
+          label="Email (optional)"
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
         />
         <Field
           label="Address"
@@ -125,7 +210,9 @@ export function CheckoutForm({ items, total }: { items: Item[]; total: number })
         disabled={pending}
         className="btn-primary w-full text-base"
       >
-        {pending ? 'Placing order…' : `Place order — UGX ${total.toLocaleString('en-UG')}`}
+        {pending
+          ? 'Placing order…'
+          : `Place order — UGX ${total.toLocaleString('en-UG')}`}
       </button>
     </form>
   );
