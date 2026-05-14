@@ -130,4 +130,16 @@ a {
   .rail::-webkit-scrollbar {
     display: none;
   }
+
+  /* ---------- Legacy utilities (kept for pages that still reference them) ---------- */
+
+  /* Generic card surface used by account/cart/checkout/orders pages */
+  .card {
+    @apply rounded-lg border border-traford-border bg-white p-4 shadow-sm;
+  }
+
+  /* Primary CTA — alias of btn-green for legacy callers */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded font-display text-[15px] font-semibold text-white bg-traford-green px-6 py-3 transition hover:bg-traford-green-dark disabled:opacity-50;
+  }
 }

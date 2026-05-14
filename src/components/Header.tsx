@@ -18,36 +18,43 @@ import { MobileNav } from './MobileNav';
  * what's actually available in the catalogue.
  */
 export async function Header() {
-  const supabase = await createClient();
+  // Wrap EVERYTHING in try/catch — Header runs on every request, so any
+  // Supabase hiccup (RLS change, schema drift, network blip) here would
+  // 500 the entire site. Better to render an empty nav than a broken site.
+  let user: { id: string } | null = null;
+  let categories: Pick<Category, 'id' | 'name' | 'slug'>[] = [];
+  let userName: string | null | undefined = undefined;
 
-  const [{ data: { user } }, { data: categoriesData }, { data: profile }] =
-    await Promise.all([
-      supabase.auth.getUser(),
-      supabase
-        .from('categories')
-        .select('id, name, slug, sort_order, parent_id, is_active')
-        .eq('is_active', true)
-        .is('parent_id', null)
-        .order('sort_order', { ascending: true }),
-      // Fetch full_name only when authed; keep query cheap.
-      supabase.auth
-        .getUser()
-        .then(async ({ data }) =>
-          data.user
-            ? supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('id', data.user.id)
-                .maybeSingle()
-            : { data: null }
-        ),
-    ]);
+  try {
+    const supabase = await createClient();
 
-  const categories = (categoriesData ?? []) as Pick<
-    Category,
-    'id' | 'name' | 'slug'
-  >[];
-  const userName = (profile as { full_name?: string | null } | null)?.full_name;
+    const userResult = await supabase.auth.getUser();
+    user = userResult.data.user;
+
+    const catResult = await supabase
+      .from('categories')
+      .select('id, name, slug, sort_order, parent_id, is_active')
+      .eq('is_active', true)
+      .is('parent_id', null)
+      .order('sort_order', { ascending: true });
+
+    categories = (catResult.data ?? []) as Pick<
+      Category,
+      'id' | 'name' | 'slug'
+    >[];
+
+    if (user) {
+      const profileResult = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      userName = (profileResult.data as { full_name?: string | null } | null)
+        ?.full_name;
+    }
+  } catch {
+    // Swallow — render the shell with no categories rather than 500-ing.
+  }
 
   return (
     <>

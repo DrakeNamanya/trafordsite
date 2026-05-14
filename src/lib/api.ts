@@ -94,6 +94,22 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * Normalise PostgREST/edge responses that may come back as either
+ *   - a bare array:        `[ {...}, {...} ]`
+ *   - a wrapped envelope:  `{ data: [...] }`
+ * Returning a consistent array prevents the entire site from 500-ing when
+ * the upstream API shape drifts between deploys.
+ */
+function unwrapList<T>(body: unknown): T[] {
+  if (Array.isArray(body)) return body as T[];
+  if (body && typeof body === 'object') {
+    const maybe = (body as { data?: unknown }).data;
+    if (Array.isArray(maybe)) return maybe as T[];
+  }
+  return [];
+}
+
 export async function fetchProducts(opts: {
   search?: string;
   categoryId?: string | number;
@@ -105,13 +121,13 @@ export async function fetchProducts(opts: {
   if (opts.categoryId !== undefined && opts.categoryId !== null) {
     params.set('category_id', String(opts.categoryId));
   }
-  const body = await getJson<{ data: ApiProduct[] }>(`/products?${params.toString()}`);
-  return body.data ?? [];
+  const body = await getJson<unknown>(`/products?${params.toString()}`);
+  return unwrapList<ApiProduct>(body);
 }
 
 export async function fetchCategories(): Promise<ApiCategory[]> {
-  const body = await getJson<{ data: ApiCategory[] }>(`/categories`);
-  return body.data ?? [];
+  const body = await getJson<unknown>(`/categories`);
+  return unwrapList<ApiCategory>(body);
 }
 
 export async function fetchProductBySlug(slug: string): Promise<ApiProduct | null> {
