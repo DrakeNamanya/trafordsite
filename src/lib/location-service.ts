@@ -1,8 +1,16 @@
 /**
  * Location service for the website — mirrors the Flutter app's LocationService.
  *
- * Loads districts/subcounties/parishes eagerly via PostgREST and villages
- * lazily per parish (the villages table has ~70k rows, never load all).
+ * IMPORTANT: PostgREST caps every response at 1000 rows by default. Uganda
+ * has ~2,190 subcounties and ~10,552 parishes, so eagerly fetching them all
+ * silently truncates the lists (the user sees only districts/subcounties
+ * and the parish/village dropdowns stay empty for many subcounties).
+ *
+ * To keep the cascade correct we now lazy-load:
+ *   • Districts: eager (only ~134 rows, well under the cap)
+ *   • Subcounties: lazy by district_id
+ *   • Parishes:   lazy by subcounty_id
+ *   • Villages:   lazy by parish_id (~70k rows total, never bulk load)
  *
  * Used by the website signup form so the cascading
  * district → subcounty → parish → village dropdowns match the mobile app
@@ -38,28 +46,45 @@ export interface Village {
 
 export interface LocationBundle {
   districts: District[];
-  subcounties: Subcounty[];
-  parishes: Parish[];
 }
 
-/** One-shot load of districts + subcounties + parishes. */
+/** Eager-load only the districts list (small enough to fit under PostgREST's 1k cap). */
 export async function loadLocationBundle(): Promise<LocationBundle> {
   const supabase = createClient();
+  const { data, error } = await supabase
+    .from('districts')
+    .select('id, name, region')
+    .order('name');
+  if (error) throw error;
+  return { districts: (data ?? []) as District[] };
+}
 
-  const [districtsRes, subcountiesRes, parishesRes] = await Promise.all([
-    supabase.from('districts').select('id, name, region').order('name'),
-    supabase
-      .from('subcounties')
-      .select('id, name, district_id')
-      .order('name'),
-    supabase.from('parishes').select('id, name, subcounty_id').order('name'),
-  ]);
+/** Lazy-load subcounties for a single district. */
+export async function loadSubcountiesFor(
+  districtId: number,
+): Promise<Subcounty[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('subcounties')
+    .select('id, name, district_id')
+    .eq('district_id', districtId)
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as Subcounty[];
+}
 
-  return {
-    districts: (districtsRes.data ?? []) as District[],
-    subcounties: (subcountiesRes.data ?? []) as Subcounty[],
-    parishes: (parishesRes.data ?? []) as Parish[],
-  };
+/** Lazy-load parishes for a single subcounty. */
+export async function loadParishesFor(
+  subcountyId: number,
+): Promise<Parish[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('parishes')
+    .select('id, name, subcounty_id')
+    .eq('subcounty_id', subcountyId)
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as Parish[];
 }
 
 /** Lazy-load villages for a single parish. */

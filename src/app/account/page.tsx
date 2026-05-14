@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Package, MapPin, User as UserIcon } from 'lucide-react';
+import { Package, MapPin, User as UserIcon, Sprout } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { SignOutButton } from './SignOutButton';
 import { formatUGX, formatDate } from '@/lib/format';
@@ -25,9 +25,32 @@ const STATUS_STYLES: Record<string, string> = {
   refunded: 'bg-gray-100 text-gray-800',
 };
 
+// Supplier-application status colour map. The `suppliers.status` column uses
+// the lifecycle: pending → reviewing → approved | rejected, plus an
+// 'on_hold' fallback some legacy rows have.
+const SUPPLIER_STATUS_STYLES: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  reviewing: 'bg-blue-100 text-blue-800',
+  under_review: 'bg-blue-100 text-blue-800',
+  on_hold: 'bg-gray-100 text-gray-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+};
+
 function statusLabel(s: string): string {
   // 'out_for_delivery' -> 'Out for delivery'
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Minimal supplier row shape — we only render a few columns.
+interface SupplierApplication {
+  id: string;
+  product: string | null;
+  quantity: string | null;
+  frequency: string | null;
+  status: string;
+  admin_notes: string | null;
+  created_at: string;
 }
 
 export default async function AccountPage() {
@@ -58,6 +81,21 @@ export default async function AccountPage() {
     .from('orders')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id);
+
+  // Fetch the user's supplier applications. Legacy rows may have user_id=null
+  // (the form used to be anonymous) so we also match on email/phone from the
+  // signed-in profile to surface those too.
+  const supplierFilters: string[] = [`user_id.eq.${user.id}`];
+  if (user.email) supplierFilters.push(`email.eq.${user.email}`);
+  if (profile?.phone) supplierFilters.push(`phone.eq.${profile.phone}`);
+
+  const { data: supplierData } = await supabase
+    .from('suppliers')
+    .select('id, product, quantity, frequency, status, admin_notes, created_at')
+    .or(supplierFilters.join(','))
+    .order('created_at', { ascending: false })
+    .limit(5);
+  const supplierApplications = (supplierData ?? []) as SupplierApplication[];
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
@@ -152,6 +190,72 @@ export default async function AccountPage() {
                   </span>
                 </div>
               </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Supplier applications — surfaces the status of the "Become a Supplier"
+          submission so the user can see at a glance whether their application
+          is pending, reviewing, approved, or rejected. */}
+      <section className="mt-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-traford-dark">
+            My supplier applications
+          </h2>
+          <Link
+            href="/become-supplier"
+            className="text-xs font-semibold uppercase tracking-wide text-traford-green hover:text-traford-green-dark"
+          >
+            New application →
+          </Link>
+        </div>
+
+        {supplierApplications.length === 0 ? (
+          <div className="card text-center">
+            <Sprout className="mx-auto h-10 w-10 text-traford-muted" />
+            <p className="mt-3 text-traford-muted">
+              You haven&apos;t applied to become a supplier yet.
+            </p>
+            <Link href="/become-supplier" className="btn-primary mt-4">
+              Become a supplier
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {supplierApplications.map((app) => (
+              <div
+                key={app.id}
+                className="card flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-traford-dark">
+                    {app.product ?? 'Supplier application'}
+                  </div>
+                  <div className="text-xs text-traford-muted">
+                    {[app.quantity, app.frequency].filter(Boolean).join(' · ') ||
+                      'Application'}
+                    {' • Submitted '}
+                    {formatDate(app.created_at)}
+                  </div>
+                  {app.admin_notes && (
+                    <div className="mt-1 text-xs text-traford-muted">
+                      <span className="font-semibold text-traford-dark">
+                        Note from team:
+                      </span>{' '}
+                      {app.admin_notes}
+                    </div>
+                  )}
+                </div>
+                <span
+                  className={`inline-block self-start rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase sm:self-auto ${
+                    SUPPLIER_STATUS_STYLES[app.status] ??
+                    'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {statusLabel(app.status)}
+                </span>
+              </div>
             ))}
           </div>
         )}

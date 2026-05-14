@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -20,6 +20,8 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import {
   loadLocationBundle,
+  loadSubcountiesFor,
+  loadParishesFor,
   loadVillagesFor,
   type District,
   type Subcounty,
@@ -30,10 +32,11 @@ import {
 /**
  * Website signup form — mirrors the Flutter app's RegisterScreen exactly.
  *
- *   • Personal info: full name (min 2 words), DOB (>=15), phone (12-digit
+ *   • Personal info: full name (min 2 words), DOB (>=16), phone (12-digit
  *     starting 256), optional email.
- *   • Location: cascading district → subcounty → parish → village (with
- *     lazy-load on village), plus street/plot text field.
+ *   • Location: cascading district → subcounty → parish → village (all
+ *     lazy-loaded from the server because there are ~2k subcounties,
+ *     ~10k parishes and ~70k villages — PostgREST caps at 1000 rows).
  *   • Password + confirm.
  *   • Optional: NIN.
  *
@@ -61,12 +64,14 @@ export function SignupForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nin, setNin] = useState('');
 
-  /* ---------- Location data ---------- */
+  /* ---------- Location data (lazy-loaded per cascade level) ---------- */
   const [districts, setDistricts] = useState<District[]>([]);
   const [subcounties, setSubcounties] = useState<Subcounty[]>([]);
   const [parishes, setParishes] = useState<Parish[]>([]);
   const [villages, setVillages] = useState<Village[]>([]);
   const [locationLoading, setLocationLoading] = useState(true);
+  const [subcountiesLoading, setSubcountiesLoading] = useState(false);
+  const [parishesLoading, setParishesLoading] = useState(false);
   const [villagesLoading, setVillagesLoading] = useState(false);
 
   /* ---------- Result/error state ---------- */
@@ -75,7 +80,7 @@ export function SignupForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  /* ---------- Eager-load districts/subcounties/parishes ---------- */
+  /* ---------- Eager-load districts only (small enough for one request) ---------- */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -83,8 +88,6 @@ export function SignupForm() {
         const bundle = await loadLocationBundle();
         if (cancelled) return;
         setDistricts(bundle.districts);
-        setSubcounties(bundle.subcounties);
-        setParishes(bundle.parishes);
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -102,21 +105,53 @@ export function SignupForm() {
     };
   }, []);
 
-  /* ---------- Filter cascades in memory ---------- */
-  const subcountiesForDistrict = useMemo(
-    () =>
-      districtId === ''
-        ? []
-        : subcounties.filter((s) => s.district_id === districtId),
-    [subcounties, districtId],
-  );
-  const parishesForSubcounty = useMemo(
-    () =>
-      subcountyId === ''
-        ? []
-        : parishes.filter((p) => p.subcounty_id === subcountyId),
-    [parishes, subcountyId],
-  );
+  /* ---------- Lazy-load subcounties when district changes ---------- */
+  useEffect(() => {
+    if (districtId === '') {
+      setSubcounties([]);
+      return;
+    }
+    let cancelled = false;
+    setSubcountiesLoading(true);
+    setSubcounties([]);
+    loadSubcountiesFor(districtId as number)
+      .then((rows) => {
+        if (!cancelled) setSubcounties(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setSubcounties([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSubcountiesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [districtId]);
+
+  /* ---------- Lazy-load parishes when subcounty changes ---------- */
+  useEffect(() => {
+    if (subcountyId === '') {
+      setParishes([]);
+      return;
+    }
+    let cancelled = false;
+    setParishesLoading(true);
+    setParishes([]);
+    loadParishesFor(subcountyId as number)
+      .then((rows) => {
+        if (!cancelled) setParishes(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setParishes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setParishesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [subcountyId]);
 
   /* ---------- Lazy-load villages when parish changes ---------- */
   useEffect(() => {
@@ -165,7 +200,7 @@ export function SignupForm() {
     if (fullName.trim().split(/\s+/).length < 2)
       return 'Enter at least first and last name';
     if (!dateOfBirth) return 'Date of birth is required';
-    if (calculateAge(dateOfBirth) < 15) return 'Must be at least 15 years old';
+    if (calculateAge(dateOfBirth) < 16) return 'Must be at least 16 years old';
     if (!phone.startsWith('256')) return 'Phone must start with 256';
     if (phone.length < 12) return 'Enter complete 12-digit number';
     if (email.trim() && (!email.includes('@') || !email.includes('.')))
@@ -342,7 +377,7 @@ export function SignupForm() {
           type="date"
           value={dateOfBirth}
           onChange={setDateOfBirth}
-          hint="You must be at least 15 years old"
+          hint="You must be at least 16 years old"
         />
         <Field
           icon={<Phone className="h-4 w-4" />}
@@ -371,14 +406,14 @@ export function SignupForm() {
         title="Location"
         subtitle={
           locationLoading
-            ? 'Loading locations…'
+            ? 'Loading districts…'
             : 'Select your district, then subcounty, parish, and village'
         }
       >
         {locationLoading ? (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500">
             <Loader2 className="h-4 w-4 animate-spin text-traford-orange" />
-            Loading locations from server…
+            Loading districts from server…
           </div>
         ) : (
           <>
@@ -404,18 +439,21 @@ export function SignupForm() {
                 setParishId('');
                 setVillageId('');
               }}
-              options={subcountiesForDistrict.map((s) => ({
+              options={subcounties.map((s) => ({
                 id: s.id,
                 name: s.name,
               }))}
               placeholder={
                 districtId === ''
                   ? 'Select district first'
-                  : subcountiesForDistrict.length === 0
-                    ? 'No subcounties available'
-                    : 'Select subcounty'
+                  : subcountiesLoading
+                    ? 'Loading subcounties…'
+                    : subcounties.length === 0
+                      ? 'No subcounties available'
+                      : 'Select subcounty'
               }
-              disabled={districtId === ''}
+              disabled={districtId === '' || subcountiesLoading}
+              busy={subcountiesLoading}
             />
             <SelectField
               icon={<Home className="h-4 w-4" />}
@@ -425,18 +463,21 @@ export function SignupForm() {
                 setParishId(v);
                 setVillageId('');
               }}
-              options={parishesForSubcounty.map((p) => ({
+              options={parishes.map((p) => ({
                 id: p.id,
                 name: p.name,
               }))}
               placeholder={
                 subcountyId === ''
                   ? 'Select subcounty first'
-                  : parishesForSubcounty.length === 0
-                    ? 'No parishes available'
-                    : 'Select parish'
+                  : parishesLoading
+                    ? 'Loading parishes…'
+                    : parishes.length === 0
+                      ? 'No parishes available'
+                      : 'Select parish'
               }
-              disabled={subcountyId === ''}
+              disabled={subcountyId === '' || parishesLoading}
+              busy={parishesLoading}
             />
             <SelectField
               icon={<MapPin className="h-4 w-4" />}
