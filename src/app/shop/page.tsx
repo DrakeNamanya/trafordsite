@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Search, Star } from 'lucide-react';
 import { ProductCard } from '@/components/ProductCard';
 import { fetchCategories, fetchProducts } from '@/lib/api';
+import { SortMenu } from './SortMenu';
 
 // Cloudflare Pages: run on the Workers edge runtime
 export const runtime = 'edge';
@@ -282,7 +283,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
             <div className="font-semibold text-traford-dark">
               {count} {count === 1 ? 'product' : 'products'}
             </div>
-            <SortMenu params={params} />
+            <SortMenu />
           </div>
 
           {products.length === 0 ? (
@@ -304,51 +305,5 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
         </div>
       </div>
     </div>
-  );
-}
-
-function SortMenu({
-  params,
-}: {
-  params: {
-    category?: string;
-    q?: string;
-    sort?: string;
-    min?: string;
-    max?: string;
-    rating?: string;
-  };
-}) {
-  const options = [
-    { v: 'newest', label: 'Newest' },
-    { v: 'price_asc', label: 'Price: Low to High' },
-    { v: 'price_desc', label: 'Price: High to Low' },
-    { v: 'rating', label: 'Top rated' },
-  ];
-  return (
-    <form action="/shop" method="GET" className="flex items-center gap-2">
-      <label className="hidden text-gray-500 sm:block">Sort by:</label>
-      <select
-        name="sort"
-        defaultValue={params.sort ?? 'newest'}
-        onChange={(e) => e.currentTarget.form?.submit()}
-        className="rounded-full border border-traford-border bg-white px-3 py-1.5 text-xs font-medium outline-none"
-      >
-        {options.map((o) => (
-          <option key={o.v} value={o.v}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      {params.category && (
-        <input type="hidden" name="category" value={params.category} />
-      )}
-      {params.q && <input type="hidden" name="q" value={params.q} />}
-      {params.min && <input type="hidden" name="min" value={params.min} />}
-      {params.max && <input type="hidden" name="max" value={params.max} />}
-      {params.rating && (
-        <input type="hidden" name="rating" value={params.rating} />
-      )}
-    </form>
   );
 }

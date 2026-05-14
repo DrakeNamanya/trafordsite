@@ -1,14 +1,34 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Package, MapPin, LogOut, User as UserIcon } from 'lucide-react';
+import { Package, MapPin, User as UserIcon } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { SignOutButton } from './SignOutButton';
-import type { Profile } from '@/lib/supabase/types';
+import { formatUGX, formatDate } from '@/lib/format';
+import type { Profile, Order } from '@/lib/supabase/types';
 
 
 // Cloudflare Pages: run on the Workers edge runtime
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
+
+// Status badges so users can see at a glance where each order is in its
+// lifecycle. Mirrors the colour coding used on /account/orders.
+const STATUS_STYLES: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  confirmed: 'bg-blue-100 text-blue-800',
+  preparing: 'bg-blue-100 text-blue-800',
+  processing: 'bg-blue-100 text-blue-800',
+  shipped: 'bg-indigo-100 text-indigo-800',
+  out_for_delivery: 'bg-indigo-100 text-indigo-800',
+  delivered: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800',
+  refunded: 'bg-gray-100 text-gray-800',
+};
+
+function statusLabel(s: string): string {
+  // 'out_for_delivery' -> 'Out for delivery'
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -23,6 +43,16 @@ export default async function AccountPage() {
     .eq('id', user.id)
     .maybeSingle();
   const profile = profileData as Profile | null;
+
+  // Fetch recent orders directly so users see status badges right on /account
+  // (confirmed / processing / out_for_delivery / delivered / cancelled).
+  const { data: ordersData } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(5);
+  const recentOrders = (ordersData ?? []) as Order[];
 
   const { count: orderCount } = await supabase
     .from('orders')
@@ -66,6 +96,65 @@ export default async function AccountPage() {
           title="Addresses"
           subtitle="Manage delivery addresses"
         />
+      </section>
+
+      {/* Recent orders with live status — mirrors /account/orders so the user
+          can see confirmed / processing / delivered etc. without an extra click */}
+      <section className="mt-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-traford-dark">Recent orders</h2>
+          {recentOrders.length > 0 && (
+            <Link
+              href="/account/orders"
+              className="text-xs font-semibold uppercase tracking-wide text-traford-green hover:text-traford-green-dark"
+            >
+              View all →
+            </Link>
+          )}
+        </div>
+
+        {recentOrders.length === 0 ? (
+          <div className="card text-center">
+            <Package className="mx-auto h-10 w-10 text-traford-muted" />
+            <p className="mt-3 text-traford-muted">
+              You haven&apos;t placed any orders yet.
+            </p>
+            <Link href="/shop" className="btn-primary mt-4">
+              Start shopping
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {recentOrders.map((order) => (
+              <Link
+                key={order.id}
+                href={`/account/orders/${order.id}`}
+                className="card flex items-center justify-between gap-3 transition hover:border-traford-orange"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-traford-dark">
+                    {order.order_number}
+                  </div>
+                  <div className="text-xs text-traford-muted">
+                    {formatDate(order.created_at)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-traford-orange">
+                    {formatUGX(order.total)}
+                  </div>
+                  <span
+                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                      STATUS_STYLES[order.status] ?? 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    {statusLabel(order.status)}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

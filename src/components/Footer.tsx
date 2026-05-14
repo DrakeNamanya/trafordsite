@@ -8,16 +8,22 @@ import type { Category } from '@/lib/supabase/types';
  * Categories list is fed live from Supabase so it stays in sync with the catalogue.
  */
 export async function Footer() {
-  const supabase = await createClient();
-  const { data: categoriesData } = await supabase
-    .from('categories')
-    .select('id, name, slug')
-    .eq('is_active', true)
-    .is('parent_id', null)
-    .order('sort_order', { ascending: true })
-    .limit(8);
-
-  const categories = (categoriesData ?? []) as Pick<Category, 'id' | 'name' | 'slug'>[];
+  // Footer renders on every request — wrap Supabase calls in try/catch so a
+  // schema drift or network blip can never 500 the whole site.
+  let categories: Pick<Category, 'id' | 'name' | 'slug'>[] = [];
+  try {
+    const supabase = await createClient();
+    const { data: categoriesData } = await supabase
+      .from('categories')
+      .select('id, name, slug')
+      .eq('is_active', true)
+      .is('parent_id', null)
+      .order('sort_order', { ascending: true })
+      .limit(8);
+    categories = (categoriesData ?? []) as Pick<Category, 'id' | 'name' | 'slug'>[];
+  } catch {
+    // Render footer with no dynamic category list rather than 500-ing.
+  }
 
   return (
     <footer className="bg-traford-dark text-gray-300">
