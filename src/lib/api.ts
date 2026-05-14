@@ -62,6 +62,12 @@ export interface GuestCheckoutPayload {
   delivery_city?: string;
   notes?: string;
   items: GuestCheckoutItem[];
+  /**
+   * 'delivery' (default — charges the configured shipping fee) or 'pickup'
+   * (no shipping fee, customer collects from the outlet). The server reads
+   * either `delivery_method` or `fulfillment` so both clients stay in sync.
+   */
+  delivery_method?: 'delivery' | 'pickup';
 }
 
 export interface GuestCheckoutResponse {

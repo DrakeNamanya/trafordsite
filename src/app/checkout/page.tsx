@@ -33,9 +33,6 @@ export default function CheckoutPage() {
     return null; // redirect is in-flight
   }
 
-  const shipping = 5000;
-  const total = subtotal + shipping;
-
   const rpcItems = items.map((i) => ({
     product_id: i.productId,
     quantity: i.quantity,
@@ -47,9 +44,11 @@ export default function CheckoutPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
+          {/* CheckoutForm handles its own shipping math based on the delivery
+              method selection — we just hand it the subtotal. */}
           <CheckoutForm
             items={rpcItems}
-            total={total}
+            subtotal={subtotal}
             onSuccess={() => clearCart()}
           />
         </div>
@@ -73,10 +72,9 @@ export default function CheckoutPage() {
           </div>
           <div className="border-t border-traford-border pt-3 text-sm">
             <Row label="Subtotal" value={formatUGX(subtotal)} />
-            <Row label="Shipping" value={formatUGX(shipping)} />
-            <div className="mt-2 border-t border-traford-border pt-2">
-              <Row label="Total" value={formatUGX(total)} bold />
-            </div>
+            <p className="mt-2 text-[11px] text-traford-muted">
+              Shipping is calculated from your selected delivery method.
+            </p>
           </div>
         </aside>
       </div>

@@ -39,11 +39,22 @@ export function ProductCard({ product }: { product: ApiProduct }) {
   const originalPrice =
     product.compare_at_price ?? product.original_price ?? null;
 
-  // Stable pseudo-random "sold" number so cards look populated without DB.
-  const soldCount = Math.max(
-    12,
-    Math.round(((product.rating || 4.2) * 37 + (product.review_count || 4) * 11) % 999) + 12,
-  );
+  // Real stock-based labels:
+  //  - Out of stock        → "Out of stock"
+  //  - Very low  (<= 5)    → "Only N left"
+  //  - Low       (<= 20)   → "N in stock"
+  //  - Plenty              → "N+ in stock" (rounded down to nearest 10)
+  const stock = Math.max(0, Number(product.stock) || 0);
+  let stockLabel: string;
+  if (stock <= 0) {
+    stockLabel = 'Out of stock';
+  } else if (stock <= 5) {
+    stockLabel = `Only ${stock} left`;
+  } else if (stock <= 20) {
+    stockLabel = `${stock} in stock`;
+  } else {
+    stockLabel = `${Math.floor(stock / 10) * 10}+ in stock`;
+  }
 
   return (
     <Link
@@ -123,7 +134,17 @@ export function ProductCard({ product }: { product: ApiProduct }) {
               ({product.review_count || 0})
             </span>
           </span>
-          <span className="text-gray-400">{soldCount} sold</span>
+          <span
+            className={
+              stock <= 0
+                ? 'font-semibold text-traford-red'
+                : stock <= 5
+                ? 'font-semibold text-amber-600'
+                : 'text-gray-400'
+            }
+          >
+            {stockLabel}
+          </span>
         </div>
 
         {product.unit ? (
