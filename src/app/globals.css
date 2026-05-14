@@ -88,4 +88,46 @@ a {
   .page-banner p {
     @apply mt-1 text-sm text-white/80;
   }
+
+  /* ---------- Joom-style additions ---------- */
+
+  /* Filter chip used on /shop */
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-traford-border bg-white px-3.5 py-1.5 text-xs font-medium text-gray-600 transition hover:border-traford-green hover:text-traford-green;
+  }
+  .chip-active {
+    @apply border-traford-green bg-traford-green text-white hover:text-white;
+  }
+
+  /* Section heading row (title + view-all link) */
+  .section-heading {
+    @apply mb-4 flex items-center justify-between;
+  }
+  .section-heading h2 {
+    @apply font-display text-xl uppercase text-traford-dark sm:text-2xl;
+  }
+  .section-heading a {
+    @apply text-xs font-semibold uppercase tracking-wide text-traford-green hover:text-traford-green-dark;
+  }
+
+  /* Sticky shop sidebar */
+  .shop-sidebar {
+    @apply sticky top-[88px] hidden h-fit w-[240px] flex-shrink-0 rounded-lg border border-traford-border bg-white p-4 lg:block;
+  }
+  .shop-sidebar h4 {
+    @apply mb-2 font-display text-[13px] uppercase text-traford-dark;
+  }
+
+  /* Deals strip card */
+  .deal-card {
+    @apply flex flex-shrink-0 items-center gap-3 rounded-lg border border-traford-border bg-white px-4 py-3 transition hover:border-traford-orange hover:shadow-sm;
+  }
+
+  /* Joom-style horizontal scroll rail */
+  .rail {
+    @apply -mx-2 flex gap-3 overflow-x-auto px-2 pb-2 [-ms-overflow-style:none] [scrollbar-width:none];
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
 }

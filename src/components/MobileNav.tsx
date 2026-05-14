@@ -70,6 +70,13 @@ export function MobileNav({
             Contact
           </Link>
           <Link
+            href="/supplier"
+            onClick={() => setOpen(false)}
+            className="font-display block border-b border-gray-100 px-5 py-3 text-sm uppercase text-traford-green transition hover:bg-gray-50"
+          >
+            Become a supplier
+          </Link>
+          <Link
             href={isAuthed ? '/account' : '/login'}
             onClick={() => setOpen(false)}
             className="font-display block px-5 py-3 text-sm uppercase text-traford-text transition hover:bg-gray-50 hover:text-traford-green"

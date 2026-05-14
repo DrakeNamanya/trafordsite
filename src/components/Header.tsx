@@ -86,6 +86,12 @@ export async function Header() {
             >
               Contact
             </Link>
+            <Link
+              href="/supplier"
+              className="font-display whitespace-nowrap border-b-[3px] border-transparent px-2 py-6 text-[13px] font-semibold text-traford-green transition hover:border-traford-green"
+            >
+              Supplier
+            </Link>
           </div>
 
           {/* Right-side actions */}
