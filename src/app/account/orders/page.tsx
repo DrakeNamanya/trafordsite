@@ -34,13 +34,46 @@ export default async function OrdersPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login?redirect=/account/orders');
 
-  const { data } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+  // Wrap the query so a row-level-security / schema mismatch / network blip
+  // never propagates as an unhandled exception → CF Pages "Internal Server
+  // Error". On failure we just render the empty state.
+  //
+  // ALSO match the user's phone (from profiles.shipping_phone on the order
+  // row) so that orders placed via guest-checkout — which links to a
+  // different profile id keyed off phone — still surface here.
+  let orders: Order[] = [];
+  let queryError: string | null = null;
+  try {
+    // Load profile phone so we can OR against shipping_phone.
+    let userPhone: string | null = null;
+    try {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('phone')
+        .eq('id', user.id)
+        .maybeSingle();
+      const p = (profileData as { phone?: string | null } | null)?.phone;
+      if (typeof p === 'string' && p.length > 0) userPhone = p;
+    } catch {
+      /* non-fatal */
+    }
 
-  const orders = (data ?? []) as Order[];
+    const orFilters: string[] = [`user_id.eq.${user.id}`];
+    if (userPhone) orFilters.push(`shipping_phone.eq.${userPhone}`);
+
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .or(orFilters.join(','))
+      .order('created_at', { ascending: false });
+    if (error) {
+      queryError = error.message;
+    } else {
+      orders = (data ?? []) as Order[];
+    }
+  } catch (err) {
+    queryError = err instanceof Error ? err.message : 'Failed to load orders';
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
@@ -52,10 +85,17 @@ export default async function OrdersPage() {
         </Link>
       </div>
 
+      {queryError && (
+        <div className="card mb-4 border-amber-200 bg-amber-50 text-sm text-amber-900">
+          We couldn&apos;t load your latest orders right now. Please refresh in
+          a moment.
+        </div>
+      )}
+
       {orders.length === 0 ? (
         <div className="card text-center">
           <Package className="mx-auto h-10 w-10 text-traford-muted" />
-          <p className="mt-3 text-traford-muted">You haven't placed any orders yet.</p>
+          <p className="mt-3 text-traford-muted">You haven&apos;t placed any orders yet.</p>
           <Link href="/shop" className="btn-primary mt-4">
             Start shopping
           </Link>
@@ -78,7 +118,7 @@ export default async function OrdersPage() {
               </div>
               <div className="text-right">
                 <div className="font-bold text-traford-orange">
-                  {formatUGX(order.total)}
+                  {formatUGX(Number(order.total ?? 0))}
                 </div>
                 <span
                   className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${

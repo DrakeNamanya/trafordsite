@@ -85,10 +85,17 @@ export interface Order {
   status: OrderStatus;
   order_type: OrderType;
   subtotal: number;
-  shipping_cost: number;
+  // Production schema (migration 004) uses `shipping_fee`; older code used
+  // `shipping_cost`. Keep both optional so reads against either spelling
+  // don't crash formatUGX(undefined).
+  shipping_fee: number;
+  shipping_cost?: number;
   tax: number;
   total: number;
   notes: string | null;
+  shipping_address?: string | null;
+  shipping_city?: string | null;
+  shipping_phone?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -100,5 +107,8 @@ export interface OrderItem {
   product_name: string;
   unit_price: number;
   quantity: number;
-  line_total: number;
+  // Production schema (migration 004) stores the per-line total as
+  // `subtotal`; legacy code reads `line_total`. Keep both readable.
+  subtotal: number;
+  line_total?: number;
 }

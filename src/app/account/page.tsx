@@ -60,42 +60,68 @@ export default async function AccountPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login?redirect=/account');
 
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle();
-  const profile = profileData as Profile | null;
+  // Defensive: any single failed query should not 500 the entire /account
+  // page. We log via console (visible in Cloudflare worker logs) and fall
+  // back to the empty state.
+  let profile: Profile | null = null;
+  try {
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+    profile = (profileData as Profile | null) ?? null;
+  } catch {
+    profile = null;
+  }
 
-  // Fetch recent orders directly so users see status badges right on /account
-  // (confirmed / processing / out_for_delivery / delivered / cancelled).
-  const { data: ordersData } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(5);
-  const recentOrders = (ordersData ?? []) as Order[];
+  // Fetch recent orders + total order count. ALSO try matching on phone or
+  // email so customers who placed orders via guest-checkout (which links the
+  // order to a guest profile id, not the auth.uid) still see them.
+  let recentOrders: Order[] = [];
+  let orderCount = 0;
+  try {
+    const orderFilters: string[] = [`user_id.eq.${user.id}`];
+    if (user.email) orderFilters.push(`shipping_phone.eq.${user.email}`); // no-op, kept for parity
+    if (profile?.phone) orderFilters.push(`shipping_phone.eq.${profile.phone}`);
 
-  const { count: orderCount } = await supabase
-    .from('orders')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id);
+    const { data: ordersData } = await supabase
+      .from('orders')
+      .select('*')
+      .or(orderFilters.join(','))
+      .order('created_at', { ascending: false })
+      .limit(5);
+    recentOrders = (ordersData ?? []) as Order[];
+
+    const { count } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .or(orderFilters.join(','));
+    orderCount = count ?? 0;
+  } catch {
+    recentOrders = [];
+    orderCount = 0;
+  }
 
   // Fetch the user's supplier applications. Legacy rows may have user_id=null
   // (the form used to be anonymous) so we also match on email/phone from the
   // signed-in profile to surface those too.
-  const supplierFilters: string[] = [`user_id.eq.${user.id}`];
-  if (user.email) supplierFilters.push(`email.eq.${user.email}`);
-  if (profile?.phone) supplierFilters.push(`phone.eq.${profile.phone}`);
+  let supplierApplications: SupplierApplication[] = [];
+  try {
+    const supplierFilters: string[] = [`user_id.eq.${user.id}`];
+    if (user.email) supplierFilters.push(`email.eq.${user.email}`);
+    if (profile?.phone) supplierFilters.push(`phone.eq.${profile.phone}`);
 
-  const { data: supplierData } = await supabase
-    .from('suppliers')
-    .select('id, product, quantity, frequency, status, admin_notes, created_at')
-    .or(supplierFilters.join(','))
-    .order('created_at', { ascending: false })
-    .limit(5);
-  const supplierApplications = (supplierData ?? []) as SupplierApplication[];
+    const { data: supplierData } = await supabase
+      .from('suppliers')
+      .select('id, product, quantity, frequency, status, admin_notes, created_at')
+      .or(supplierFilters.join(','))
+      .order('created_at', { ascending: false })
+      .limit(5);
+    supplierApplications = (supplierData ?? []) as SupplierApplication[];
+  } catch {
+    supplierApplications = [];
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
@@ -179,7 +205,7 @@ export default async function AccountPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-traford-orange">
-                    {formatUGX(order.total)}
+                    {formatUGX(Number(order.total ?? 0))}
                   </div>
                   <span
                     className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${

@@ -187,16 +187,32 @@ export function CheckoutForm({
             ? typedAddress || PICKUP_ADDRESS
             : typedAddress;
 
-        const response = await guestCheckout({
-          full_name: fullName.trim(),
-          phone: phone.trim(),
-          email: email.trim() || undefined,
-          delivery_address: deliveryAddress,
-          delivery_city: 'Uganda',
-          notes: `Payment method: ${paymentMethod}`,
-          items: checkoutItems,
-          delivery_method: deliveryMethod,
-        });
+        // If the customer is signed in, forward their access token so the
+        // backend links the order to their existing auth.users row rather
+        // than creating a brand-new guest profile (which was causing the
+        // "orders disappear after logout / login" bug).
+        let accessToken: string | null = null;
+        try {
+          const supabase = createClient();
+          const { data: sessionData } = await supabase.auth.getSession();
+          accessToken = sessionData.session?.access_token ?? null;
+        } catch {
+          accessToken = null;
+        }
+
+        const response = await guestCheckout(
+          {
+            full_name: fullName.trim(),
+            phone: phone.trim(),
+            email: email.trim() || undefined,
+            delivery_address: deliveryAddress,
+            delivery_city: 'Uganda',
+            notes: `Payment method: ${paymentMethod}`,
+            items: checkoutItems,
+            delivery_method: deliveryMethod,
+          },
+          { accessToken },
+        );
 
         const number =
           response.order_number ?? response.order?.order_number ?? null;

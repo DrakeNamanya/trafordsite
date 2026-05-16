@@ -32,22 +32,50 @@ export default async function OrderDetailPage({ params }: OrderDetailProps) {
   } = await supabase.auth.getUser();
   if (!user) redirect(`/login?redirect=/account/orders/${id}`);
 
-  const { data: orderData } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .maybeSingle();
+  // Pull the user's phone so we can also match orders placed via
+  // guest-checkout (linked to a separate profile id keyed off phone).
+  let userPhone: string | null = null;
+  try {
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('phone')
+      .eq('id', user.id)
+      .maybeSingle();
+    const p = (profileData as { phone?: string | null } | null)?.phone;
+    if (typeof p === 'string' && p.length > 0) userPhone = p;
+  } catch {
+    /* non-fatal */
+  }
+
+  // Try matching by either user_id or shipping_phone.
+  let orderData: Record<string, unknown> | null = null;
+  try {
+    const orFilters: string[] = [`user_id.eq.${user.id}`];
+    if (userPhone) orFilters.push(`shipping_phone.eq.${userPhone}`);
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', id)
+      .or(orFilters.join(','))
+      .maybeSingle();
+    orderData = (data as Record<string, unknown> | null) ?? null;
+  } catch {
+    orderData = null;
+  }
 
   if (!orderData) notFound();
-  const order = orderData as Order;
+  const order = orderData as unknown as Order;
 
-  const { data: itemsData } = await supabase
-    .from('order_items')
-    .select('*')
-    .eq('order_id', order.id);
-
-  const items = (itemsData ?? []) as OrderItem[];
+  let items: OrderItem[] = [];
+  try {
+    const { data: itemsData } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', order.id);
+    items = (itemsData ?? []) as OrderItem[];
+  } catch {
+    items = [];
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
@@ -84,28 +112,52 @@ export default async function OrderDetailPage({ params }: OrderDetailProps) {
 
       <div className="card mt-4 space-y-3">
         <h2 className="text-sm font-bold">Items</h2>
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-center justify-between border-b border-traford-border pb-2 last:border-0 last:pb-0"
-          >
-            <div>
-              <div className="text-sm font-semibold">{item.product_name}</div>
-              <div className="text-xs text-traford-muted">
-                {formatUGX(item.unit_price)} × {item.quantity}
+        {items.map((item) => {
+          // Production schema stores per-line total in `subtotal`. Some
+          // legacy rows used `line_total`. Fall back across both so we
+          // never feed `undefined` into `formatUGX` (which crashed the page).
+          const lineTotal =
+            (item as { subtotal?: number; line_total?: number }).subtotal ??
+            (item as { subtotal?: number; line_total?: number }).line_total ??
+            Number(item.unit_price ?? 0) * Number(item.quantity ?? 0);
+          return (
+            <div
+              key={item.id}
+              className="flex items-center justify-between border-b border-traford-border pb-2 last:border-0 last:pb-0"
+            >
+              <div>
+                <div className="text-sm font-semibold">{item.product_name}</div>
+                <div className="text-xs text-traford-muted">
+                  {formatUGX(Number(item.unit_price ?? 0))} × {item.quantity}
+                </div>
+              </div>
+              <div className="text-sm font-bold">
+                {formatUGX(Number(lineTotal))}
               </div>
             </div>
-            <div className="text-sm font-bold">{formatUGX(item.line_total)}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="card mt-4 space-y-2 text-sm">
-        <Row label="Subtotal" value={formatUGX(order.subtotal)} />
-        <Row label="Shipping" value={formatUGX(order.shipping_cost)} />
-        {order.tax > 0 && <Row label="Tax" value={formatUGX(order.tax)} />}
+        <Row label="Subtotal" value={formatUGX(Number(order.subtotal ?? 0))} />
+        <Row
+          label="Shipping"
+          value={formatUGX(
+            Number(
+              (order as { shipping_fee?: number; shipping_cost?: number })
+                .shipping_fee ??
+                (order as { shipping_fee?: number; shipping_cost?: number })
+                  .shipping_cost ??
+                0,
+            ),
+          )}
+        />
+        {Number(order.tax ?? 0) > 0 && (
+          <Row label="Tax" value={formatUGX(Number(order.tax))} />
+        )}
         <div className="border-t border-traford-border pt-2">
-          <Row label="Total" value={formatUGX(order.total)} bold />
+          <Row label="Total" value={formatUGX(Number(order.total ?? 0))} bold />
         </div>
       </div>
 

@@ -142,11 +142,24 @@ export async function fetchProductBySlug(slug: string): Promise<ApiProduct | nul
 }
 
 export async function guestCheckout(
-  payload: GuestCheckoutPayload
+  payload: GuestCheckoutPayload,
+  opts: { accessToken?: string | null } = {},
 ): Promise<GuestCheckoutResponse> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  // When a signed-in user is checking out, forward their access token so the
+  // server can link the order to *their* user_id rather than running the
+  // phone-lookup / new-auth-user code path. This fixes the bug where
+  // checkout was minting a fresh auth.users row with a random password and
+  // leaving the original account unable to see its orders.
+  if (opts.accessToken) {
+    headers.Authorization = `Bearer ${opts.accessToken}`;
+  }
   const res = await fetch(`${API_BASE}/orders/guest-checkout`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   });
   const json = (await res.json().catch(() => null)) as
