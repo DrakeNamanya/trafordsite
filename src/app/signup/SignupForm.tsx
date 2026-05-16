@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   User,
@@ -46,7 +46,6 @@ import {
  * /login — no orphan auth.users rows.
  */
 export function SignupForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') ?? '/account';
 
@@ -322,7 +321,13 @@ export function SignupForm() {
         // Non-fatal — profile may auto-populate via trigger
       }
 
-      // 4. SEED profiles.password_hash via RPC so phone+password works
+      // 4. SEED profiles.password_hash via RPC so phone+password works.
+      //    This RPC needs the pgcrypto extension. If the migration hasn't
+      //    been applied yet the call will fail with a 42883 — we swallow
+      //    it because Supabase Auth (which we use for login) already has
+      //    the password stored in auth.users, so the user can still sign
+      //    in. The RPC is only needed by the mobile app's legacy
+      //    verify_phone_password path.
       try {
         await supabase.rpc('set_user_password', {
           p_user_id: user.id,
@@ -332,10 +337,14 @@ export function SignupForm() {
         // Migration may not be applied yet; non-fatal.
       }
 
-      // 5. Done — redirect on session, or show confirm-email message
+      // 5. Done — hard-navigate so the middleware sees the new session
+      //    cookies on the next request. router.push() is a client-side
+      //    transition and Cloudflare Pages' middleware would still see
+      //    the pre-signup empty cookie state, redirecting straight back
+      //    to /login. window.location.href forces a real request that
+      //    carries the freshly-written supabase auth cookies.
       if (signUpData.session) {
-        router.push(redirect);
-        router.refresh();
+        window.location.href = redirect;
       } else {
         setMessage(
           'Account created! Check your email to confirm, then sign in with your phone + password.',
